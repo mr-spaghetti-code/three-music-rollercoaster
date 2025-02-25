@@ -5,7 +5,7 @@ import { setupAudio, getAudioData, getAudioElement, togglePlayPause, restartRide
 import { setupCamera, updateCameraPosition, updateControls, handleResize, getCamera, toggleViewMode } from './camera.js';
 import { createRollercoaster, getRollercoasterPath, createLightOrbs, updateLightOrbs } from './rollercoaster.js';
 import { createEnvironments, toggleZoneVisibility, setupLighting, createParticleSystem } from './environments.js';
-import { animateObjects, togglePsychedelicEffects } from './animations.js';
+import { animateObjects, togglePsychedelicEffects, resampleMoveableObjects } from './animations.js';
 import { createPsychedelicBackground, updateBackgroundUniforms, handleZoneChange, setupPostProcessing, updateBloomEffect, handlePostProcessingResize } from './effects.js';
 import { updateLoadingProgress, loadData, findClosestTimeIndex } from './utils.js';
 
@@ -383,6 +383,10 @@ function createEnvironmentElements() {
         console.log(`Added ${envAnimatedObjects.length} environment objects to animation list`);
     }
     
+    // Initial sampling of which objects can move
+    const moveableCount = resampleMoveableObjects(animatedObjects);
+    console.log(`Initially sampled ${moveableCount} objects that can move discretely`);
+    
     // Create rollercoaster from energy data after environment is created
     const rollercoaster = createRollercoaster(scene, energyData, energyData);
     
@@ -398,6 +402,12 @@ function createEnvironmentElements() {
     
     // Register event handler for zone changes
     document.addEventListener('zonechange', (event) => handleZoneChange(event, scene));
+    
+    // Add listener for zone change to resample moveable objects
+    window.addEventListener('zoneChange', () => {
+        console.log('Zone changed, resampling moveable objects');
+        resampleMoveableObjects(animatedObjects);
+    });
     
     updateLoadingProgress(90, "Environment created!");
     

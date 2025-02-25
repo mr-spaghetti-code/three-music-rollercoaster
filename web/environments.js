@@ -241,7 +241,7 @@ export function createEnvironments(scene) {
     });
     
     // Create additional shared geometric objects
-    createSharedGeometricObjects(scene, 300); // Increased count for more objects
+    createSharedGeometricObjects(scene, 500); // Increased count for more objects
     
     // Initially hide all zones except the default one
     toggleZoneVisibility('low');
@@ -630,7 +630,7 @@ function createAdHocEnvironment(scene, zoneName) {
     }
     
     // Create more objects for a richer environment
-    const objectCount = 400; // Doubled from 200
+    const objectCount = 700;
     
     // Create a variety of objects with different properties
     for (let i = 0; i < objectCount; i++) {
@@ -882,7 +882,7 @@ function createAdHocEnvironment(scene, zoneName) {
             movePhase: Math.random() * Math.PI * 2,
             
             // Flag for discrete movement (reduced from 20% to 10% chance)
-            canMoveDiscrete: Math.random() < 0.1
+            canMoveDiscrete: Math.random() < 0.5
         };
         
         // If this object can move discretely, store its original emissive color
@@ -935,6 +935,8 @@ function createAdHocEnvironment(scene, zoneName) {
 
 // Create additional shared geometric objects
 function createSharedGeometricObjects(scene, count) {
+    // Increase from 300 to 500 shared geometric objects
+    count = 500;
     console.log(`Creating ${count} additional shared geometric objects`);
     
     // Use geometryCreators directly from import to avoid async issues
@@ -1027,7 +1029,7 @@ function createSharedGeometricObjects(scene, count) {
                 pulseFactor: 0.2 + Math.random() * 0.3,
                 
                 // Flag for discrete movement (reduced from 30% to 15% chance for geometric objects)
-                canMoveDiscrete: Math.random() < 0.15
+                canMoveDiscrete: Math.random() < 0.6
             };
             
             // If this object can move discretely, store its original emissive color

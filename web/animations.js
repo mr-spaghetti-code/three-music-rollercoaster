@@ -11,7 +11,7 @@ const discreteLocations = [];
 function initDiscreteLocations() {
     // Create a grid of positions in 3D space
     const gridSize = 10; // 10x10x10 grid
-    const spacing = 50;  // 50 units between points
+    const spacing = 60;  // Reduced from 100 to 60 to make movements less dramatic
     const centerOffset = (gridSize * spacing) / 2; // Center the grid
     
     for (let x = 0; x < gridSize; x++) {
@@ -27,6 +27,67 @@ function initDiscreteLocations() {
     }
     
     console.log(`Created ${discreteLocations.length} discrete locations for object movement`);
+}
+
+// Resample which objects can move discretely
+// This should be called whenever the zone changes
+export function resampleMoveableObjects(animatedObjects) {
+    console.log("Resampling objects that can move discretely");
+    
+    // Count objects before resampling
+    let beforeCount = 0;
+    animatedObjects.forEach(obj => {
+        if (obj.userData && obj.userData.canMoveDiscrete) {
+            beforeCount++;
+        }
+    });
+    
+    // Set a higher percentage of objects that can move (70%)
+    const moveablePercentage = 0.7;
+    
+    // Resample which objects can move
+    animatedObjects.forEach(obj => {
+        if (obj.userData) {
+            // Reset movement flag based on random chance
+            // But only for objects that should be eligible for movement
+            if (obj.userData.type && 
+                (obj.userData.type.includes('Object') || 
+                 obj.userData.type === 'geometric' || 
+                 obj.userData.animationType)) {
+                
+                obj.userData.canMoveDiscrete = Math.random() < moveablePercentage;
+                
+                // If this object can now move, make sure it has required properties
+                if (obj.userData.canMoveDiscrete) {
+                    // Store original emissive if it has a material with emissive property
+                    if (obj.material && obj.material.emissive && !obj.userData.originalEmissive) {
+                        obj.userData.originalEmissive = obj.material.emissive.clone();
+                    }
+                    
+                    // Store original position if not already stored
+                    if (!obj.userData.originalPosition) {
+                        obj.userData.originalPosition = obj.position.clone();
+                    }
+                    
+                    // Store original scale if not already stored
+                    if (!obj.userData.originalScale) {
+                        obj.userData.originalScale = obj.scale.clone();
+                    }
+                }
+            }
+        }
+    });
+    
+    // Count objects after resampling
+    let afterCount = 0;
+    animatedObjects.forEach(obj => {
+        if (obj.userData && obj.userData.canMoveDiscrete) {
+            afterCount++;
+        }
+    });
+    
+    console.log(`Resampled moveable objects: ${beforeCount} before, ${afterCount} after`);
+    return afterCount;
 }
 
 // Initialize the discrete locations when this module loads
@@ -52,23 +113,31 @@ function moveToDiscreteLocation(obj, bassIntensity, midIntensity, trebleIntensit
     // Calculate distance to target
     const distance = obj.position.distanceTo(targetLocation);
     
-    // Limit travel distance to reduce lag (max 300 units)
-    if (distance > 300) {
+    // Limit travel distance - FURTHER REDUCED to be even less distracting
+    // Changed from 150 to 100 to make movements even more subtle
+    const maxDistance = 100;
+    let targetPos = targetLocation.clone();
+    
+    if (distance > maxDistance) {
         // Create a new target that's in the same direction but closer
         const direction = new THREE.Vector3().subVectors(targetLocation, obj.position).normalize();
-        targetLocation.copy(obj.position).addScaledVector(direction, 300);
+        targetPos = new THREE.Vector3().copy(obj.position).addScaledVector(direction, maxDistance);
     }
     
-    // Calculate animation duration based on distance and audio intensity
-    const baseDuration = 1.0; // Base duration in seconds
-    const speedFactor = 1.0 + (bassIntensity + midIntensity) * 2.0; // Speed up with audio intensity
-    const duration = Math.max(0.5, baseDuration * (distance / 100) / speedFactor);
+    // Calculate animation duration based on music beat
+    // Assume average beat duration is around 0.5 seconds (120 BPM)
+    // We can adjust this to match the specific song if tempo data is available
+    const beatDuration = 0.5; // Default beat duration for 120 BPM
     
-    // Debug: Log movement occasionally
-    if (Math.random() < 0.1) { // Only log 10% of movements to avoid console spam
+    // Adjust duration slightly based on audio intensity, but keep it close to one beat
+    const durationVariation = 0.2; // Allow 20% variation from beat
+    const duration = beatDuration * (1 - durationVariation + durationVariation * 2 * Math.random());
+    
+    // Debug: Log movement more frequently
+    if (Math.random() < 0.3) { // Increased from 0.1 to 0.3 (30% of movements)
         console.log(`Moving ${obj.userData.type} to discrete location:`, 
             `From (${obj.position.x.toFixed(0)}, ${obj.position.y.toFixed(0)}, ${obj.position.z.toFixed(0)})`,
-            `To (${targetLocation.x.toFixed(0)}, ${targetLocation.y.toFixed(0)}, ${targetLocation.z.toFixed(0)})`,
+            `To (${targetPos.x.toFixed(0)}, ${targetPos.y.toFixed(0)}, ${targetPos.z.toFixed(0)})`,
             `Duration: ${duration.toFixed(2)}s, Audio: Bass=${bassIntensity.toFixed(2)}, Mid=${midIntensity.toFixed(2)}`);
     }
     
@@ -82,7 +151,7 @@ function moveToDiscreteLocation(obj, bassIntensity, midIntensity, trebleIntensit
     
     // Create a visual trail effect only for 15% of movements and when we don't have too many objects moving
     if (Math.random() < 0.15 && currentlyMoving < 10) {
-        createMovementTrail(obj, targetLocation, duration, bassIntensity);
+        createMovementTrail(obj, targetPos, duration, bassIntensity);
     }
     
     // Choose an easing function based on the audio characteristics
@@ -101,11 +170,41 @@ function moveToDiscreteLocation(obj, bassIntensity, midIntensity, trebleIntensit
         ease = "power1.inOut";
     }
     
+    // Make sure GSAP is available
+    if (typeof gsap === 'undefined') {
+        console.error("GSAP not available for animations - objects won't move");
+        return;
+    }
+    
+    // Store original rotation
+    const originalRotation = {
+        x: obj.rotation.x,
+        y: obj.rotation.y, 
+        z: obj.rotation.z
+    };
+    
+    // Generate random spin amount based on audio intensity
+    const spinIntensity = 0.5 + (bassIntensity + midIntensity) * 1.5;
+    const randomSpins = {
+        x: (Math.random() < 0.5 ? Math.PI * 2 : 0) * spinIntensity * (Math.random() < 0.5 ? -1 : 1),
+        y: (Math.random() < 0.7 ? Math.PI * 2 : 0) * spinIntensity * (Math.random() < 0.5 ? -1 : 1),
+        z: (Math.random() < 0.5 ? Math.PI * 2 : 0) * spinIntensity * (Math.random() < 0.5 ? -1 : 1)
+    };
+    
+    // Add full random spins during movement (up to 2 complete rotations)
+    gsap.to(obj.rotation, {
+        x: originalRotation.x + randomSpins.x,
+        y: originalRotation.y + randomSpins.y,
+        z: originalRotation.z + randomSpins.z,
+        duration: duration,
+        ease: "power1.inOut"
+    });
+    
     // Use GSAP to animate the position
     gsap.to(obj.position, {
-        x: targetLocation.x,
-        y: targetLocation.y,
-        z: targetLocation.z,
+        x: targetPos.x,
+        y: targetPos.y,
+        z: targetPos.z,
         duration: duration,
         ease: ease,
         onComplete: () => {
@@ -113,23 +212,31 @@ function moveToDiscreteLocation(obj, bassIntensity, midIntensity, trebleIntensit
             obj.userData.lastMoveTime = Date.now();
             // Decrement the count of currently moving objects
             window.currentlyMovingObjects = (window.currentlyMovingObjects || 1) - 1;
+            // Log completion for debugging
+            if (Math.random() < 0.1) {
+                console.log(`Object movement complete: ${obj.userData.type}`);
+            }
         }
     });
     
     // Also animate rotation to face the direction of movement
-    const direction = new THREE.Vector3().subVectors(targetLocation, obj.position).normalize();
+    // This is now complementary to the random spins added above
+    const direction = new THREE.Vector3().subVectors(targetPos, obj.position).normalize();
     const targetRotation = new THREE.Euler();
     
     // Calculate target rotation to face the movement direction
     targetRotation.y = Math.atan2(direction.x, direction.z);
     targetRotation.x = Math.atan2(-direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z));
     
-    // Animate rotation
+    // We don't need this separate rotation animation anymore since we're doing random spins
+    // Instead we'll just add a subtle wobble
     gsap.to(obj.rotation, {
-        x: targetRotation.x,
-        y: targetRotation.y,
-        duration: duration * 0.8, // Slightly faster than position animation
-        ease: "power1.inOut"
+        x: originalRotation.x + randomSpins.x + Math.random() * 0.2 - 0.1,
+        y: originalRotation.y + randomSpins.y + Math.random() * 0.2 - 0.1, 
+        z: originalRotation.z + randomSpins.z + Math.random() * 0.2 - 0.1,
+        duration: duration * 1.2, // Slightly longer than the movement
+        ease: "elastic.out(1, 0.3)",
+        delay: duration  // Apply this after the main spin
     });
     
     // Add a scale pulse effect during movement
@@ -354,20 +461,30 @@ export function animateObjects(timeStep, audioData, animatedObjects, energyData)
         // We'll do this for objects that have the canMoveDiscrete flag and meet certain conditions
         if (obj.userData.canMoveDiscrete) {
             // Only move if:
-            // 1. We've hit a bar boundary OR
+            // 1. We've hit a bar boundary (most important - sync with music structure) OR
             // 2. There's a significant energy change OR
             // 3. It's been a while since the last move AND there's significant audio intensity
             const timeSinceLastMove = now - (obj.userData.lastMoveTime || 0);
             const audioIntensity = bassLevel + midLevel + trebleLevel;
             
-            if ((shouldReposition && Math.random() < 0.4) || 
-                (transitionIntensity > 0.4 && Math.random() < 0.3) || 
-                (timeSinceLastMove > 8000 && audioIntensity > 1.8 && Math.random() < 0.2)) {
-                
-                // Only move some objects, not all at once - reduced probability
-                if (Math.random() < 0.2) { // 20% chance to move on a qualifying event (reduced from 30%)
+            // Prioritize bar boundaries for better music sync (80% chance)
+            if (shouldReposition && Math.random() < 0.8) {
+                // Higher chance of moving on bar boundaries to sync with music
+                if (Math.random() < 0.7) { // Increased from 0.6 to 0.7 (70% chance to move on a bar boundary)
                     moveToDiscreteLocation(obj, bassLevel, midLevel, trebleLevel);
                 }
+            }
+            // Secondary condition - energy transitions
+            else if (transitionIntensity > 0.25 && Math.random() < 0.5) { // Lowered threshold and increased chance
+                // Move when there's a significant change in music energy
+                if (Math.random() < 0.6) { // Increased from 0.5 to 0.6 (60% chance to move on energy transition)
+                    moveToDiscreteLocation(obj, bassLevel, midLevel, trebleLevel);
+                }
+            }
+            // Fallback condition - periodic movement based on audio intensity
+            else if (timeSinceLastMove > 3000 && audioIntensity > 0.9 && Math.random() < 0.4) { // More lenient conditions
+                // Move after some time has passed and we have enough audio intensity
+                moveToDiscreteLocation(obj, bassLevel, midLevel, trebleLevel);
             }
         }
         
