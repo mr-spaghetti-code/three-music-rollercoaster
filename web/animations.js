@@ -909,9 +909,5 @@ export function togglePsychedelicEffects() {
     state.psychedelicEffectsEnabled = !state.psychedelicEffectsEnabled;
     console.log(`Psychedelic effects: ${state.psychedelicEffectsEnabled ? 'Enabled' : 'Disabled'}`);
     
-    // Update button text
-    const button = document.getElementById('toggle-effects');
-    if (button) {
-        button.querySelector('.control-icon').textContent = state.psychedelicEffectsEnabled ? '✨' : '🔍';
-    }
+    // Button no longer exists, so we just log the state change
 } 

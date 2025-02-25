@@ -438,8 +438,6 @@ function finishLoading() {
     document.getElementById('restart').addEventListener('click', restartRide);
     document.getElementById('skip-forward').addEventListener('click', skipForward);
     document.getElementById('skip-backward').addEventListener('click', skipBackward);
-    document.getElementById('toggle-view').addEventListener('click', () => toggleViewMode(getRollercoasterPath(), getAudioElement()));
-    document.getElementById('toggle-effects').addEventListener('click', togglePsychedelicEffects);
     
     // Setup keyboard controls
     window.addEventListener('keydown', handleKeyDown);
@@ -593,7 +591,6 @@ function startIntroAnimation() {
     // Hide UI elements during intro animation
     document.getElementById('info').style.opacity = '0';
     document.getElementById('controls').style.opacity = '0';
-    document.getElementById('view-controls').style.opacity = '0';
     document.getElementById('back-to-menu').style.opacity = '0';
     
     // Prepare audio for immediate playback
@@ -821,7 +818,6 @@ function startIntroAnimation() {
                     const uiOpacity = uiFadeProgress.toFixed(2);
                     document.getElementById('info').style.opacity = uiOpacity;
                     document.getElementById('controls').style.opacity = uiOpacity;
-                    document.getElementById('view-controls').style.opacity = uiOpacity;
                     document.getElementById('back-to-menu').style.opacity = uiOpacity;
                 }
             } catch (error) {
@@ -1034,7 +1030,6 @@ function startIntroAnimation() {
             // Ensure UI elements are fully visible
             document.getElementById('info').style.opacity = '1';
             document.getElementById('controls').style.opacity = '1';
-            document.getElementById('view-controls').style.opacity = '1';
             document.getElementById('back-to-menu').style.opacity = '1';
             
             console.log("Intro animation complete, starting smooth transition to first-person mode");
@@ -1077,12 +1072,6 @@ function handleKeyDown(event) {
             break;
         case 'ArrowLeft': // Skip backward
             skipBackward();
-            break;
-        case 'v': // Toggle view mode
-            toggleViewMode(getRollercoasterPath(), getAudioElement());
-            break;
-        case 'p': // Toggle psychedelic effects
-            togglePsychedelicEffects();
             break;
         case 'Escape': // Go back to menu
             document.getElementById('back-to-menu').click();

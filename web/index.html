@@ -48,6 +48,19 @@
 				text-align: center;
 			}
 			
+			/* Gradient title style - can be used for any title */
+			.gradient-title {
+				background: linear-gradient(45deg, #00ff99, #4fc3f7, #ff3d00, #9370db);
+				background-size: 300% 300%;
+				-webkit-background-clip: text;
+				background-clip: text;
+				-webkit-text-fill-color: transparent;
+				animation: gradient-shift 8s ease infinite;
+				text-align: center;
+				text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+				font-weight: bold;
+			}
+			
 			#enter-button {
 				padding: 15px 40px;
 				background: linear-gradient(45deg, #00ff99, #4fc3f7);
@@ -115,10 +128,69 @@
 				align-items: center;
 			}
 			
+			/* CD Grid Layout */
+			.cd-grid {
+				display: grid;
+				grid-template-columns: repeat(2, 1fr);
+				gap: 30px;
+				max-width: 90%;
+				margin: 0 auto 30px;
+				justify-items: center;
+			}
+			
+			/* Responsive adjustments */
+			@media (max-width: 768px) {
+				.cd-grid {
+					grid-template-columns: 1fr;
+					gap: 20px;
+				}
+				
+				.cd-container {
+					margin: 0 10px;
+					width: 160px;
+				}
+				
+				.cd {
+					height: 160px;
+				}
+				
+				#splash-title {
+					font-size: 3rem;
+				}
+				
+				#splash-subtitle {
+					font-size: 1.2rem;
+				}
+			}
+			
+			@media (max-width: 480px) {
+				.cd-container {
+					width: 140px;
+				}
+				
+				.cd {
+					height: 140px;
+				}
+				
+				.cd-info {
+					font-size: 0.8rem;
+				}
+				
+				.preview-button, .upload-button {
+					padding: 6px 12px;
+					font-size: 0.7rem;
+				}
+				
+				#splash-title {
+					font-size: 2.5rem;
+				}
+			}
+			
 			.cd-container {
 				display: inline-block;
-				margin: 0 30px;
-				width: 200px;
+				margin: 0 15px;
+				width: 180px;
+				max-width: 100%;
 				position: relative;
 				perspective: 1000px;
 				cursor: pointer;
@@ -127,7 +199,7 @@
 			
 			.cd {
 				width: 100%;
-				height: 200px;
+				height: 180px;
 				position: relative;
 				transform-style: preserve-3d;
 				transition: transform 0.5s, box-shadow 0.5s;
@@ -144,11 +216,54 @@
 				justify-content: center;
 				align-items: center;
 				box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+				overflow: hidden; /* Ensure the image stays within the circular boundary */
 			}
 			
 			.cd-front {
 				background: radial-gradient(circle at center, #333 0%, #111 70%, #000 100%);
 				border: 2px solid #444;
+			}
+			
+			/* CD Cover Image */
+			.cd-cover-image {
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+				opacity: 0.85; /* Slightly transparent to blend with CD */
+				z-index: 1;
+			}
+			
+			/* Vinyl texture overlay */
+			.vinyl-texture {
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				border-radius: 50%;
+				background: 
+					repeating-radial-gradient(
+						circle at center,
+						transparent 0px,
+						transparent 4px,
+						rgba(0, 0, 0, 0.1) 5px,
+						rgba(0, 0, 0, 0.1) 6px
+					);
+				opacity: 0.4;
+				z-index: 2;
+				pointer-events: none;
+			}
+			
+			/* CD Reflection */
+			.cd-reflection {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				border-radius: 50%;
+				background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.1) 100%);
+				z-index: 3;
+				pointer-events: none;
 			}
 			
 			.cd-front::after {
@@ -162,6 +277,7 @@
 				border-radius: 50%;
 				background: radial-gradient(circle at center, #777, #333);
 				border: 1px solid #555;
+				z-index: 2;
 			}
 			
 			.cd-front::before {
@@ -174,6 +290,7 @@
 				border-radius: 50%;
 				background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0) 100%);
 				pointer-events: none;
+				z-index: 2;
 			}
 			
 			.cd-label {
@@ -190,7 +307,8 @@
 				color: white;
 				text-align: center;
 				font-size: 0.9rem;
-				z-index: 2;
+				z-index: 4; /* Ensure label is on top */
+				background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
 			}
 			
 			.cd-info {
@@ -279,6 +397,39 @@
 			
 			.cd.spinning {
 				animation: spin 4s linear infinite;
+			}
+			
+			/* Add a subtle pulsing glow effect when spinning */
+			@keyframes pulse-glow {
+				0% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
+				50% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.5); }
+				100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
+			}
+			
+			.cd.spinning .cd-face {
+				animation: pulse-glow 2s ease-in-out infinite;
+			}
+			
+			/* Add a subtle rainbow effect to the edge of spinning CDs */
+			.cd.spinning::after {
+				content: '';
+				position: absolute;
+				top: -2px;
+				left: -2px;
+				right: -2px;
+				bottom: -2px;
+				border-radius: 50%;
+				background: linear-gradient(45deg, rgba(255,0,0,0.2), rgba(255,255,0,0.2), rgba(0,255,0,0.2), rgba(0,255,255,0.2), rgba(0,0,255,0.2), rgba(255,0,255,0.2));
+				background-size: 400% 400%;
+				animation: rainbow-shift 3s linear infinite;
+				z-index: 0;
+				pointer-events: none;
+			}
+			
+			@keyframes rainbow-shift {
+				0% { background-position: 0% 50%; }
+				50% { background-position: 100% 50%; }
+				100% { background-position: 0% 50%; }
 			}
 			
 			.cd-container.selected .cd {
@@ -371,17 +522,6 @@
 				z-index: 100;
 			}
 			
-			#view-controls {
-				position: fixed;
-				top: 10px;
-				right: 10px;
-				color: white;
-				background-color: rgba(0, 0, 0, 0.5);
-				padding: 10px;
-				border-radius: 5px;
-				z-index: 100;
-			}
-			
 			.control-icon {
 				font-size: 18px;
 				font-weight: bold;
@@ -390,7 +530,7 @@
 			#back-to-menu {
 				position: fixed;
 				top: 10px;
-				right: 90px;
+				right: 10px;
 				background-color: rgba(0, 0, 0, 0.5);
 				color: white;
 				width: 36px;
@@ -451,20 +591,19 @@
 		
 		<!-- Loading Screen -->
 		<div id="loading">
-			<h1>SoundScape Voyager</h1>
+			<h1 class="gradient-title" style="font-size: 3rem; margin-bottom: 1rem;">SoundScape Voyager</h1>
 			
 			<div id="song-selection">
-				<h2>Select a Song</h2>
+				<h2 class="gradient-title" style="font-size: 2rem; margin-bottom: 1.5rem;">Select a Song</h2>
 				
 				<!-- CD Selection -->
-				<div style="display: flex; justify-content: center; margin-bottom: 30px;">
+				<div class="cd-grid">
 					<div class="cd-container" data-song="polo">
 						<div class="cd">
 							<div class="cd-face cd-front">
-								<div class="cd-label">
-									<h3>Polo</h3>
-									<p>Hip-hop</p>
-								</div>
+								<img src="textures/cd_covers/polo.jpg" alt="Polo Album Cover" class="cd-cover-image">
+								<div class="vinyl-texture"></div>
+								<div class="cd-reflection"></div>
 							</div>
 						</div>
 						<div class="cd-info">Dynamic energy levels</div>
@@ -476,10 +615,9 @@
 					<div class="cd-container" data-song="chan">
 						<div class="cd">
 							<div class="cd-face cd-front">
-								<div class="cd-label">
-									<h3>Chan Chan</h3>
-									<p>Pop ballad</p>
-								</div>
+								<img src="textures/cd_covers/chan.jpg" alt="Chan Chan Album Cover" class="cd-cover-image">
+								<div class="vinyl-texture"></div>
+								<div class="cd-reflection"></div>
 							</div>
 						</div>
 						<div class="cd-info">Emotional crescendos</div>
@@ -488,9 +626,26 @@
 						</div>
 					</div>
 					
+					<div class="cd-container" data-song="vandre">
+						<div class="cd">
+							<div class="cd-face cd-front">
+								<img src="textures/cd_covers/vandre.png" alt="Vandre Album Cover" class="cd-cover-image">
+								<div class="vinyl-texture"></div>
+								<div class="cd-reflection"></div>
+							</div>
+						</div>
+						<div class="cd-info">Rhythmic journey</div>
+						<div class="cd-buttons">
+							<button class="preview-button">Preview</button>
+						</div>
+					</div>
+					
 					<div class="cd-container" data-song="custom">
 						<div class="cd">
 							<div class="cd-face cd-front">
+								<img src="textures/cd_covers/custom.png" alt="" class="cd-cover-image">
+								<div class="vinyl-texture"></div>
+								<div class="cd-reflection"></div>
 								<div class="cd-label">
 									<h3>Custom Song</h3>
 									<p>Upload your MP3</p>
@@ -522,17 +677,6 @@
 			<div>Zone: <span id="current-zone">Loading...</span></div>
 			<div>Energy: <span id="current-energy">0.00</span></div>
 			<div>Time: <span id="current-time">0:00</span></div>
-		</div>
-		
-		<div id="view-controls">
-			<button id="toggle-view" class="tooltip">
-				<span class="tooltiptext">Toggle View Mode (V)</span>
-				<span class="control-icon">👁️</span>
-			</button>
-			<button id="toggle-effects" class="tooltip">
-				<span class="tooltiptext">Toggle Psychedelic Effects</span>
-				<span class="control-icon">✨</span>
-			</button>
 		</div>
 		
 		<div id="back-to-menu" class="tooltip">

@@ -63,9 +63,8 @@ export function toggleViewMode(rollercoasterPath, audioElement) {
     firstPersonControls.enabled = state.firstPersonMode;
     orbitControls.enabled = !state.firstPersonMode;
     
-    // Update button text
-    const button = document.getElementById('toggle-view');
-    button.querySelector('.control-icon').textContent = state.firstPersonMode ? '👁️' : '🔄';
+    // Button no longer exists, so we just log the state change
+    console.log(`View mode: ${state.firstPersonMode ? 'First Person' : 'Orbit'}`);
     
     // If switching to orbit mode, set the orbit target to a point ahead on the track
     if (!state.firstPersonMode && rollercoasterPath) {
