@@ -10,8 +10,18 @@ let audioElement, audioContext, audioSource, analyser;
 export function setupAudio(song = 'polo') {
     return new Promise((resolve, reject) => {
         try {
-            // Create audio element with the selected song (now in a subdirectory)
-            audioElement = new Audio(`audio/${song}/${song}.mp3`);
+            // Create audio element with the selected song
+            let audioSrc;
+            
+            // If this is a custom song with an upload ID, use the unique directory
+            if (song === 'custom' && window.customSongUploadId) {
+                audioSrc = `audio/custom/${window.customSongUploadId}/custom.mp3`;
+                console.log(`Using custom song from: ${audioSrc}`);
+            } else {
+                audioSrc = `audio/${song}/${song}.mp3`;
+            }
+            
+            audioElement = new Audio(audioSrc);
             audioElement.crossOrigin = 'anonymous';
             
             // Create audio context

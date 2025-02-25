@@ -227,6 +227,51 @@
 				background-color: #f44336;
 			}
 			
+			/* Custom Upload Styling */
+			.upload-button {
+				padding: 8px 15px;
+				border: none;
+				border-radius: 20px;
+				font-size: 0.8rem;
+				font-weight: bold;
+				cursor: pointer;
+				transition: transform 0.2s, background-color 0.3s;
+				background-color: #9c27b0;
+				color: #fff;
+			}
+			
+			.upload-button:hover {
+				background-color: #7b1fa2;
+				transform: scale(1.05);
+			}
+			
+			.custom-file-input {
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				opacity: 0;
+				cursor: pointer;
+				z-index: 2;
+			}
+			
+			.upload-spinner {
+				display: none;
+				width: 20px;
+				height: 20px;
+				border: 3px solid rgba(255,255,255,0.3);
+				border-radius: 50%;
+				border-top-color: #fff;
+				animation: spin 1s ease-in-out infinite;
+				margin-right: 8px;
+			}
+			
+			.upload-status {
+				display: none;
+				font-size: 0.8rem;
+				margin-top: 5px;
+				color: #00e676;
+			}
+			
 			@keyframes spin {
 				from { transform: rotate(0deg); }
 				to { transform: rotate(360deg); }
@@ -442,6 +487,26 @@
 							<button class="preview-button">Preview</button>
 						</div>
 					</div>
+					
+					<div class="cd-container" data-song="custom">
+						<div class="cd">
+							<div class="cd-face cd-front">
+								<div class="cd-label">
+									<h3>Custom Song</h3>
+									<p>Upload your MP3</p>
+								</div>
+							</div>
+						</div>
+						<div class="cd-info">Your own music</div>
+						<div class="cd-buttons">
+							<div style="position: relative; display: inline-flex; align-items: center;">
+								<input type="file" accept=".mp3" class="custom-file-input" id="custom-song-upload">
+								<div class="upload-spinner" id="upload-spinner"></div>
+								<button class="upload-button" id="upload-button">Upload MP3</button>
+							</div>
+						</div>
+						<div class="upload-status" id="upload-status"></div>
+					</div>
 				</div>
 				
 				<button id="start-button" disabled>Start Experience</button>
@@ -523,6 +588,113 @@
 				let previewAudio = null;
 				let currentlyPlaying = null;
 				
+				// Custom upload elements
+				const customFileInput = document.getElementById('custom-song-upload');
+				const uploadButton = document.getElementById('upload-button');
+				const uploadSpinner = document.getElementById('upload-spinner');
+				const uploadStatus = document.getElementById('upload-status');
+				let uploadId = null;
+				let statusCheckInterval = null;
+				
+				// Handle custom song upload
+				customFileInput.addEventListener('change', function(e) {
+					if (e.target.files.length === 0) return;
+					
+					const file = e.target.files[0];
+					if (!file.name.toLowerCase().endsWith('.mp3')) {
+						alert('Please select an MP3 file');
+						return;
+					}
+					
+					// Show spinner and update button
+					uploadSpinner.style.display = 'inline-block';
+					uploadButton.textContent = 'Uploading...';
+					uploadStatus.style.display = 'block';
+					uploadStatus.textContent = 'Uploading file...';
+					uploadStatus.style.color = '#ffea00';
+					
+					// Create form data
+					const formData = new FormData();
+					formData.append('file', file);
+					
+					// Send to server
+					fetch('/upload', {
+						method: 'POST',
+						body: formData
+					})
+					.then(response => response.json())
+					.then(data => {
+						if (data.error) {
+							throw new Error(data.error);
+						}
+						
+						uploadId = data.upload_id;
+						uploadStatus.textContent = 'Processing...';
+						
+						// Start checking status
+						if (statusCheckInterval) {
+							clearInterval(statusCheckInterval);
+						}
+						
+						statusCheckInterval = setInterval(checkUploadStatus, 2000);
+					})
+					.catch(error => {
+						uploadSpinner.style.display = 'none';
+						uploadButton.textContent = 'Upload Failed';
+						uploadStatus.textContent = error.message || 'Upload failed';
+						uploadStatus.style.color = '#f44336';
+						
+						setTimeout(() => {
+							uploadButton.textContent = 'Upload MP3';
+						}, 3000);
+					});
+				});
+				
+				// Check upload status
+				function checkUploadStatus() {
+					if (!uploadId) return;
+					
+					fetch(`/status/${uploadId}`)
+						.then(response => response.json())
+						.then(data => {
+							uploadStatus.textContent = data.message || 'Processing...';
+							
+							if (data.status === 'complete') {
+								clearInterval(statusCheckInterval);
+								uploadSpinner.style.display = 'none';
+								uploadButton.textContent = 'Upload Complete';
+								uploadStatus.textContent = 'Ready to play';
+								uploadStatus.style.color = '#00e676';
+								
+								// Save the upload ID to a global variable for later use
+								window.customSongUploadId = uploadId;
+								
+								// Select this CD
+								cdContainers.forEach(cd => {
+									cd.classList.remove('selected');
+								});
+								document.querySelector('.cd-container[data-song="custom"]').classList.add('selected');
+								window.selectedSong = 'custom';
+								startButton.style.display = 'inline-block';
+								startButton.disabled = false;
+							} else if (data.status === 'error') {
+								clearInterval(statusCheckInterval);
+								uploadSpinner.style.display = 'none';
+								uploadButton.textContent = 'Upload Failed';
+								uploadStatus.textContent = data.message || 'Processing failed';
+								uploadStatus.style.color = '#f44336';
+								
+								setTimeout(() => {
+									uploadButton.textContent = 'Upload MP3';
+								}, 3000);
+							}
+						})
+						.catch(error => {
+							uploadStatus.textContent = 'Error checking status';
+							uploadStatus.style.color = '#f44336';
+						});
+				}
+				
 				// Enter button click event
 				enterButton.addEventListener('click', function() {
 					// Fade out splash screen
@@ -547,6 +719,9 @@
 					const cd = container.querySelector('.cd');
 					const previewButton = container.querySelector('.preview-button');
 					
+					// Skip for custom upload CD
+					if (songName === 'custom') return;
+					
 					// Create audio element for preview
 					const audio = new Audio(`./audio/${songName}/preview.mp3`);
 					audio.volume = 0;
@@ -562,6 +737,11 @@
 						// Don't trigger if clicking on the preview button
 						if (e.target.classList.contains('preview-button') || 
 							e.target.closest('.preview-button')) {
+							return;
+						}
+						
+						// Skip if this is the custom CD and no upload is complete
+						if (songName === 'custom' && (!uploadId || uploadButton.textContent !== 'Upload Complete')) {
 							return;
 						}
 						
@@ -612,6 +792,30 @@
 					});
 				});
 				
+				// Make the custom CD clickable for selection
+				document.querySelector('.cd-container[data-song="custom"]').addEventListener('click', function(e) {
+					// Don't trigger if clicking on the upload button or file input
+					if (e.target.id === 'custom-song-upload' || 
+						e.target.id === 'upload-button' || 
+						e.target.closest('#upload-button')) {
+						return;
+					}
+					
+					// Only allow selection if upload is complete
+					if (uploadButton.textContent === 'Upload Complete') {
+						// Remove selected class from all CDs
+						cdContainers.forEach(cd => {
+							cd.classList.remove('selected');
+						});
+						
+						// Add selected class to this CD
+						document.querySelector('.cd-container[data-song="custom"]').classList.add('selected');
+						window.selectedSong = 'custom';
+						startButton.style.display = 'inline-block';
+						startButton.disabled = false;
+					}
+				});
+				
 				// Function to stop any playing preview
 				function stopPreview() {
 					if (previewAudio) {
@@ -622,7 +826,7 @@
 							const button = container.querySelector('.preview-button');
 							const cd = container.querySelector('.cd');
 							
-							if (button.classList.contains('playing')) {
+							if (button && button.classList.contains('playing')) {
 								button.textContent = 'Preview';
 								button.classList.remove('playing');
 								cd.classList.remove('spinning');
@@ -645,6 +849,15 @@
 						
 						// Update loading text
 						updateLoadingProgress(0, "Initializing...");
+						
+						// If using custom song, tell the server to keep the files
+						if (window.selectedSong === 'custom' && uploadId) {
+							// Pass the upload ID to the main.js via a global variable
+							window.customSongUploadId = uploadId;
+							
+							fetch(`/cleanup/${uploadId}`)
+								.catch(err => console.error('Error notifying server about cleanup:', err));
+						}
 						
 						// Start initialization
 						init();
@@ -694,6 +907,9 @@
 						loadingText.textContent = message;
 					}
 				}
+				
+				// Expose updateLoadingProgress globally
+				window.updateLoadingProgress = updateLoadingProgress;
 				
 				// Expose init function for the start button
 				window.init = function() {

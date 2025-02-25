@@ -306,7 +306,13 @@ async function setupAudioWithProgress() {
 // Load data files with progress tracking
 async function loadDataWithProgress() {
     // Determine the data directory based on the selected song
-    const dataDir = `data/${selectedSong}/`;
+    let dataDir = `data/${selectedSong}/`;
+    
+    // If this is a custom song with an upload ID, use the unique directory
+    if (selectedSong === 'custom' && window.customSongUploadId) {
+        dataDir = `data/custom/${window.customSongUploadId}/`;
+        console.log(`Using custom song upload ID: ${window.customSongUploadId}`);
+    }
     
     // Load energy data
     updateLoadingProgress(45, "Loading energy data...");

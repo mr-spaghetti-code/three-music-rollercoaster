@@ -2,6 +2,7 @@
 """
 Music Rollercoaster Server Launcher
 This script provides a simple way to launch either the basic or advanced server.
+Use the advanced server for custom song uploads.
 """
 
 import argparse
@@ -34,7 +35,7 @@ def run_module(module_path, args):
 def main():
     """Parse arguments and run the selected server."""
     parser = argparse.ArgumentParser(description='Music Rollercoaster Server Launcher')
-    parser.add_argument('--advanced', action='store_true', help='Use the advanced server')
+    parser.add_argument('--advanced', action='store_true', help='Use the advanced server (required for custom song uploads)')
     
     # Add a special help for showing advanced server options
     parser.add_argument('--show-advanced-options', action='store_true', 
@@ -51,10 +52,11 @@ def main():
     
     # Determine which server to run
     if args.advanced:
-        print("Starting advanced server...")
+        print("Starting advanced server (supports custom song uploads)...")
         return run_module('advanced_server.py', remaining)
     else:
-        print("Starting basic server...")
+        print("Starting basic server (does NOT support custom song uploads)...")
+        print("Use --advanced flag to enable custom song uploads")
         return run_module('server.py', remaining)
 
 if __name__ == "__main__":
