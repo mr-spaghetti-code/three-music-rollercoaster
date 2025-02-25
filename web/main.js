@@ -25,152 +25,197 @@ let selectedSong = null;
 // Animation state
 let isAnimating = false;
 
+// Splash screen animation
+let splashScene, splashCamera, splashRenderer, splashClock;
+let splashParticles, splashUniforms;
+
 // Setup event listeners
-window.addEventListener('DOMContentLoaded', setupSongSelection);
+window.addEventListener('DOMContentLoaded', () => {
+    setupSplashScreen();
+    setupSongSelection();
+    setupBackToMenuButton();
+});
 window.addEventListener('resize', handleWindowResize);
 
-// Handle back to menu button
-function setupBackToMenuButton() {
-    const backButton = document.getElementById('back-to-menu');
-    if (backButton) {
-        backButton.addEventListener('click', () => {
-            console.log("Back to song selection menu clicked");
+// Setup splash screen with Three.js effects
+function setupSplashScreen() {
+    // Create a simple Three.js scene for the splash screen
+    splashScene = new THREE.Scene();
+    splashCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    splashCamera.position.z = 30;
+    
+    // Create renderer
+    splashRenderer = new THREE.WebGLRenderer({ alpha: true });
+    splashRenderer.setSize(window.innerWidth, window.innerHeight);
+    splashRenderer.setClearColor(0x000000, 0);
+    
+    // Add canvas to splash screen as background
+    const splashScreen = document.getElementById('splash-screen');
+    splashRenderer.domElement.style.position = 'absolute';
+    splashRenderer.domElement.style.top = '0';
+    splashRenderer.domElement.style.left = '0';
+    splashRenderer.domElement.style.zIndex = '-1';
+    splashScreen.appendChild(splashRenderer.domElement);
+    
+    // Create particle system for background effect
+    const particleCount = 1000;
+    const particles = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+    
+    const color = new THREE.Color();
+    
+    for (let i = 0; i < particleCount; i++) {
+        // Position
+        positions[i * 3] = (Math.random() - 0.5) * 100;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 100;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+        
+        // Color - use gradient colors from the title
+        const colorChoice = Math.random();
+        if (colorChoice < 0.25) {
+            color.set(0x00ff99); // Green
+        } else if (colorChoice < 0.5) {
+            color.set(0x4fc3f7); // Blue
+        } else if (colorChoice < 0.75) {
+            color.set(0xff3d00); // Orange
+        } else {
+            color.set(0x9370db); // Purple
+        }
+        
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+        
+        // Size
+        sizes[i] = Math.random() * 2;
+    }
+    
+    particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    particles.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    
+    // Shader material for particles
+    const particleMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            time: { value: 0 },
+            pixelRatio: { value: window.devicePixelRatio }
+        },
+        vertexShader: `
+            uniform float time;
+            uniform float pixelRatio;
+            attribute float size;
+            varying vec3 vColor;
             
-            // Hide back button
-            backButton.style.display = 'none';
+            void main() {
+                vColor = color;
+                
+                // Oscillating movement
+                vec3 pos = position;
+                pos.x += sin(time * 0.2 + position.z * 0.1) * 2.0;
+                pos.y += cos(time * 0.1 + position.x * 0.1) * 2.0;
+                pos.z += sin(time * 0.3 + position.y * 0.1) * 2.0;
+                
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                gl_PointSize = size * pixelRatio * (300.0 / -mvPosition.z);
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `,
+        fragmentShader: `
+            varying vec3 vColor;
             
-            // Show song selection menu with proper opacity and display settings
-            const loadingScreen = document.getElementById('loading');
-            loadingScreen.style.display = 'flex';
-            loadingScreen.style.opacity = '1';
-            document.getElementById('song-selection').style.display = 'block';
-            document.getElementById('loading-text').textContent = 'Select a song to begin...';
-            document.getElementById('progress-bar').style.width = '0%';
-            
-            // Clean up resources
-            cleanupResources();
-            
-            // Reset state
-            selectedSong = null;
-            
-            // Disable start button until a song is selected
-            document.getElementById('start-button').disabled = true;
-            
-            // Remove selected class from all song options
-            document.querySelectorAll('.song-option').forEach(opt => opt.classList.remove('selected'));
-        });
+            void main() {
+                // Create circular particles
+                float dist = length(gl_PointCoord - vec2(0.5));
+                if (dist > 0.5) discard;
+                
+                // Soft edge
+                float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+                gl_FragColor = vec4(vColor, alpha);
+            }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        vertexColors: true
+    });
+    
+    // Create particle system
+    splashParticles = new THREE.Points(particles, particleMaterial);
+    splashScene.add(splashParticles);
+    
+    // Store uniforms for animation
+    splashUniforms = particleMaterial.uniforms;
+    
+    // Initialize clock
+    splashClock = new THREE.Clock();
+    
+    // Start animation
+    animateSplash();
+}
+
+// Animate splash screen
+function animateSplash() {
+    // Only continue if splash renderer exists
+    if (!splashRenderer) return;
+    
+    requestAnimationFrame(animateSplash);
+    
+    // Update time uniform
+    if (splashUniforms && splashClock) {
+        splashUniforms.time.value = splashClock.getElapsedTime();
+    }
+    
+    // Rotate particle system
+    if (splashParticles) {
+        splashParticles.rotation.x += 0.0005;
+        splashParticles.rotation.y += 0.001;
+    }
+    
+    // Render scene
+    if (splashScene && splashCamera) {
+        splashRenderer.render(splashScene, splashCamera);
     }
 }
 
-// Clean up resources when going back to menu
-function cleanupResources() {
-    // Stop animation loop
-    isAnimating = false;
-    
-    // Clean up audio resources
-    cleanupAudio();
-    
-    // Clear arrays
-    energyData = [];
-    structureData = [];
-    zoneData = [];
-    animatedObjects = [];
-    
-    // Dispose of Three.js objects if they exist
-    if (scene) {
-        // Remove all objects from the scene
-        while(scene.children.length > 0) { 
-            const object = scene.children[0];
-            scene.remove(object);
-            
-            // Properly dispose of geometries and materials
-            if (object.geometry) object.geometry.dispose();
-            if (object.material) {
-                if (Array.isArray(object.material)) {
-                    object.material.forEach(material => material.dispose());
-                } else {
-                    object.material.dispose();
-                }
-            }
-        }
+// Clean up splash screen resources
+function cleanupSplashScreen() {
+    if (splashRenderer) {
+        // We'll keep the canvas in the DOM for the loading screen
+        // but we'll dispose of the Three.js resources
         
-        // Clear the scene
-        scene = null;
-    }
-    
-    // Dispose of renderer if it exists
-    if (renderer) {
-        // Remove the canvas from the DOM
-        const container = document.getElementById('canvas-container');
-        if (container && container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
+        // Dispose of the renderer but don't remove the canvas
+        splashRenderer.dispose();
         
-        renderer.dispose();
-        renderer = null;
+        // Clear references
+        splashScene = null;
+        splashCamera = null;
+        splashRenderer = null;
+        splashClock = null;
+        splashParticles = null;
+        splashUniforms = null;
+        
+        console.log("Splash screen resources cleaned up, canvas preserved for background");
     }
-    
-    // Dispose of composer if it exists
-    if (composer) {
-        composer.passes.forEach(pass => {
-            if (pass.dispose) pass.dispose();
-        });
-        composer = null;
-    }
-    
-    // Reset clock
-    clock = null;
-    
-    // Reset particle system
-    particleSystem = null;
-    
-    console.log("Resources cleaned up");
 }
 
 // Setup song selection
 function setupSongSelection() {
     console.log("Setting up song selection");
     
-    // Get song options and start button
-    const songOptions = document.querySelectorAll('.song-option');
-    const startButton = document.getElementById('start-button');
-    
-    // Add click event to song options
-    songOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            // Remove selected class from all options
-            songOptions.forEach(opt => opt.classList.remove('selected'));
-            
-            // Add selected class to clicked option
-            option.classList.add('selected');
-            
-            // Get selected song
-            selectedSong = option.getAttribute('data-song');
-            console.log(`Selected song: ${selectedSong}`);
-            
-            // Enable start button
-            startButton.disabled = false;
-        });
-    });
-    
-    // Add click event to start button
-    startButton.addEventListener('click', () => {
-        if (selectedSong) {
-            // Hide song selection
-            document.getElementById('song-selection').style.display = 'none';
-            
-            // Update loading text
-            updateLoadingProgress(0, "Initializing...");
-            
-            // Start initialization
-            init();
-        }
-    });
+    // The song selection is now handled in the HTML script
+    // We just need to make sure the init function is available globally
+    window.init = init;
 }
 
 // Initialize the application
 async function init() {
-    console.log(`Initializing Music Rollercoaster Visualization for song: ${selectedSong}`);
+    console.log(`Initializing SoundScape Voyager for song: ${window.selectedSong}`);
+    
+    // Store selected song in our variable
+    selectedSong = window.selectedSong;
+    
     updateLoadingProgress(0, "Initializing...");
     
     // Setup Three.js scene, renderer and camera
@@ -356,18 +401,28 @@ function createEnvironmentElements() {
 function finishLoading() {
     updateLoadingProgress(100, "Ready!");
     
-    // Hide loading screen
+    // Hide loading screen with a fade effect
     setTimeout(() => {
         document.getElementById('loading').style.opacity = "0";
         setTimeout(() => {
+            // Move the particle canvas to the main scene if it exists
+            const particleCanvas = document.querySelector('#loading canvas');
+            if (particleCanvas) {
+                particleCanvas.style.zIndex = '-1';
+                document.body.appendChild(particleCanvas);
+            }
+            
             document.getElementById('loading').style.display = "none";
             
             // Show back to menu button
             document.getElementById('back-to-menu').style.display = "flex";
             
-            // // Auto-play when everything is loaded
-            // console.log("Auto-starting playback");
-            // togglePlayPause();
+            // Clean up splash screen resources
+            cleanupSplashScreen();
+            
+            // Auto-play when everything is loaded
+            console.log("Auto-starting playback");
+            togglePlayPause();
         }, 500);
     }, 500);
     
@@ -379,9 +434,6 @@ function finishLoading() {
     document.getElementById('toggle-view').addEventListener('click', () => toggleViewMode(getRollercoasterPath(), getAudioElement()));
     document.getElementById('toggle-effects').addEventListener('click', togglePsychedelicEffects);
     
-    // Setup back to menu button
-    setupBackToMenuButton();
-    
     // Setup keyboard controls
     window.addEventListener('keydown', handleKeyDown);
     
@@ -390,9 +442,19 @@ function finishLoading() {
 
 // Handle window resize
 function handleWindowResize() {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    handleResize();
-    handlePostProcessingResize(renderer, window.innerWidth, window.innerHeight);
+    // Resize main renderer if it exists
+    if (renderer) {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        handleResize();
+        handlePostProcessingResize(renderer, window.innerWidth, window.innerHeight);
+    }
+    
+    // Resize splash screen renderer if it exists
+    if (splashRenderer && splashCamera) {
+        splashRenderer.setSize(window.innerWidth, window.innerHeight);
+        splashCamera.aspect = window.innerWidth / window.innerHeight;
+        splashCamera.updateProjectionMatrix();
+    }
 }
 
 // Keyboard controls
@@ -573,6 +635,134 @@ function animate() {
     } else if (renderer && scene) {
         renderer.render(scene, getCamera());
     }
+}
+
+// Handle back to menu button
+function setupBackToMenuButton() {
+    const backButton = document.getElementById('back-to-menu');
+    if (backButton) {
+        backButton.addEventListener('click', () => {
+            console.log("Back to song selection menu clicked");
+            
+            // Hide back button
+            backButton.style.display = 'none';
+            
+            // Show song selection menu with proper opacity and display settings
+            const loadingScreen = document.getElementById('loading');
+            loadingScreen.style.display = 'flex';
+            loadingScreen.style.opacity = '1';
+            document.getElementById('song-selection').style.display = 'block';
+            document.getElementById('loading-text').textContent = 'Select a song to begin...';
+            document.getElementById('progress-bar').style.width = '0%';
+            
+            // Reset CD selections and stop any spinning animations
+            document.querySelectorAll('.cd-container').forEach(container => {
+                container.classList.remove('selected');
+                
+                // Reset any spinning CDs
+                const cd = container.querySelector('.cd');
+                if (cd) {
+                    cd.classList.remove('spinning');
+                    // Ensure any inline transform styles are removed
+                    cd.style.transform = '';
+                }
+                
+                // Reset preview buttons
+                const previewButton = container.querySelector('.preview-button');
+                if (previewButton) {
+                    previewButton.textContent = 'Preview';
+                    previewButton.classList.remove('playing');
+                }
+                
+                // Stop any playing audio previews
+                const songName = container.getAttribute('data-song');
+                if (songName) {
+                    const audio = new Audio(`./audio/${songName}/preview.mp3`);
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+            });
+            
+            // Hide start button
+            document.getElementById('start-button').style.display = 'none';
+            document.getElementById('start-button').disabled = true;
+            
+            // Clean up resources
+            cleanupResources();
+            
+            // Reset state
+            selectedSong = null;
+            window.selectedSong = null;
+            
+            // Keep the splash particles animation running
+            // We don't need to recreate it since we're reusing the canvas
+        });
+    }
+}
+
+// Clean up resources when going back to menu
+function cleanupResources() {
+    // Stop animation loop
+    isAnimating = false;
+    
+    // Clean up audio resources
+    cleanupAudio();
+    
+    // Clear arrays
+    energyData = [];
+    structureData = [];
+    zoneData = [];
+    animatedObjects = [];
+    
+    // Dispose of Three.js objects if they exist
+    if (scene) {
+        // Remove all objects from the scene
+        while(scene.children.length > 0) { 
+            const object = scene.children[0];
+            scene.remove(object);
+            
+            // Properly dispose of geometries and materials
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(material => material.dispose());
+                } else {
+                    object.material.dispose();
+                }
+            }
+        }
+        
+        // Clear the scene
+        scene = null;
+    }
+    
+    // Dispose of renderer if it exists
+    if (renderer) {
+        // Remove the canvas from the DOM
+        const container = document.getElementById('canvas-container');
+        if (container && container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+        
+        renderer.dispose();
+        renderer = null;
+    }
+    
+    // Dispose of composer if it exists
+    if (composer) {
+        composer.passes.forEach(pass => {
+            if (pass.dispose) pass.dispose();
+        });
+        composer = null;
+    }
+    
+    // Reset clock
+    clock = null;
+    
+    // Reset particle system
+    particleSystem = null;
+    
+    console.log("Resources cleaned up");
 }
 
 // Make functions available globally for debugging

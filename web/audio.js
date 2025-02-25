@@ -10,8 +10,8 @@ let audioElement, audioContext, audioSource, analyser;
 export function setupAudio(song = 'polo') {
     return new Promise((resolve, reject) => {
         try {
-            // Create audio element with the selected song
-            audioElement = new Audio(`audio/${song}.mp3`);
+            // Create audio element with the selected song (now in a subdirectory)
+            audioElement = new Audio(`audio/${song}/${song}.mp3`);
             audioElement.crossOrigin = 'anonymous';
             
             // Create audio context
@@ -35,20 +35,20 @@ export function setupAudio(song = 'polo') {
             
             // Add event for when audio is ready
             audioElement.addEventListener('canplaythrough', () => {
-                console.log(`Audio loaded and ready to play: ${song}.mp3`);
+                console.log(`Audio loaded and ready to play: ${song}/${song}.mp3`);
                 resolve({ audioElement, audioContext, audioSource, analyser });
             });
             
             // Handle loading errors
             audioElement.addEventListener('error', (err) => {
-                console.error(`Audio loading error for ${song}.mp3:`, err);
+                console.error(`Audio loading error for ${song}/${song}.mp3:`, err);
                 reject(err);
             });
             
-            console.log(`Audio setup initiated for ${song}.mp3`);
+            console.log(`Audio setup initiated for ${song}/${song}.mp3`);
             
         } catch (error) {
-            console.error("Error setting up audio:", error);
+            console.error('Audio setup error:', error);
             reject(error);
         }
     });

@@ -2,13 +2,77 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8">
-		<title>Music Rollercoaster Visualization</title>
+		<title>SoundScape Voyager</title>
 		<style>
 			body { 
 				margin: 0;
 				overflow: hidden;
 				font-family: Arial, sans-serif;
+				background-color: #000;
 			}
+			
+			/* Splash Screen */
+			#splash-screen {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background-color: #000;
+				color: white;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				z-index: 2000;
+				transition: opacity 1s ease;
+			}
+			
+			#splash-title {
+				font-size: 4rem;
+				font-weight: bold;
+				margin-bottom: 1rem;
+				background: linear-gradient(45deg, #00ff99, #4fc3f7, #ff3d00, #9370db);
+				-webkit-background-clip: text;
+				background-clip: text;
+				-webkit-text-fill-color: transparent;
+				animation: gradient-shift 8s ease infinite;
+				text-align: center;
+				text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+			}
+			
+			#splash-subtitle {
+				font-size: 1.5rem;
+				margin-bottom: 3rem;
+				opacity: 0.8;
+				text-align: center;
+			}
+			
+			#enter-button {
+				padding: 15px 40px;
+				background: linear-gradient(45deg, #00ff99, #4fc3f7);
+				color: #000;
+				border: none;
+				border-radius: 30px;
+				font-size: 1.2rem;
+				font-weight: bold;
+				cursor: pointer;
+				transition: transform 0.3s, box-shadow 0.3s;
+				box-shadow: 0 0 20px rgba(0, 255, 153, 0.5);
+			}
+			
+			#enter-button:hover {
+				transform: scale(1.1);
+				box-shadow: 0 0 30px rgba(0, 255, 153, 0.8);
+			}
+			
+			@keyframes gradient-shift {
+				0% { background-position: 0% 50%; }
+				50% { background-position: 100% 50%; }
+				100% { background-position: 0% 50%; }
+			}
+			
+			/* Loading Screen */
 			#loading {
 				position: fixed;
 				top: 0;
@@ -17,13 +81,14 @@
 				height: 100%;
 				background-color: rgba(0, 0, 0, 0.9);
 				color: white;
-				display: flex;
+				display: none;
 				flex-direction: column;
 				justify-content: center;
 				align-items: center;
 				z-index: 1000;
 				transition: opacity 0.5s ease;
 			}
+			
 			#progress {
 				width: 50%;
 				height: 20px;
@@ -31,6 +96,7 @@
 				border-radius: 10px;
 				margin-top: 20px;
 			}
+			
 			#progress-bar {
 				height: 100%;
 				width: 0%;
@@ -38,37 +104,159 @@
 				border-radius: 10px;
 				transition: width 0.3s;
 			}
+			
+			/* CD Selection Screen */
 			#song-selection {
 				margin: 30px 0;
 				text-align: center;
+				perspective: 1000px;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
 			}
-			.song-option {
+			
+			.cd-container {
 				display: inline-block;
-				margin: 0 15px;
-				padding: 15px 25px;
-				background-color: #333;
-				border-radius: 10px;
+				margin: 0 30px;
+				width: 200px;
+				position: relative;
+				perspective: 1000px;
+				cursor: pointer;
+				transition: transform 0.5s;
+			}
+			
+			.cd {
+				width: 100%;
+				height: 200px;
+				position: relative;
+				transform-style: preserve-3d;
+				transition: transform 0.5s, box-shadow 0.5s;
+			}
+			
+			.cd-face {
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				border-radius: 50%;
+				backface-visibility: hidden;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+			}
+			
+			.cd-front {
+				background: radial-gradient(circle at center, #333 0%, #111 70%, #000 100%);
+				border: 2px solid #444;
+			}
+			
+			.cd-front::after {
+				content: '';
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: 20%;
+				height: 20%;
+				border-radius: 50%;
+				background: radial-gradient(circle at center, #777, #333);
+				border: 1px solid #555;
+			}
+			
+			.cd-front::before {
+				content: '';
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				border-radius: 50%;
+				background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0) 100%);
+				pointer-events: none;
+			}
+			
+			.cd-label {
+				position: absolute;
+				width: 40%;
+				height: 40%;
+				border-radius: 50%;
+				top: 30%;
+				left: 30%;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				color: white;
+				text-align: center;
+				font-size: 0.9rem;
+				z-index: 2;
+			}
+			
+			.cd-info {
+				margin-top: 10px;
+				color: white;
+				opacity: 0.8;
+				font-size: 0.9rem;
+			}
+			
+			.cd-buttons {
+				display: flex;
+				justify-content: center;
+				margin-top: 15px;
+			}
+			
+			.preview-button {
+				padding: 8px 15px;
+				border: none;
+				border-radius: 20px;
+				font-size: 0.8rem;
+				font-weight: bold;
 				cursor: pointer;
 				transition: transform 0.2s, background-color 0.3s;
-			}
-			.song-option:hover {
-				background-color: #555;
-				transform: scale(1.05);
-			}
-			.song-option.selected {
-				background-color: #00ff99;
+				background-color: #4fc3f7;
 				color: #000;
 			}
-			.song-option h3 {
-				margin: 0 0 10px 0;
+			
+			.preview-button:hover {
+				background-color: #29b6f6;
+				transform: scale(1.05);
 			}
-			.song-option p {
-				margin: 0;
-				font-size: 14px;
-				opacity: 0.8;
+			
+			.preview-button.playing {
+				background-color: #f44336;
 			}
+			
+			@keyframes spin {
+				from { transform: rotate(0deg); }
+				to { transform: rotate(360deg); }
+			}
+			
+			.cd.spinning {
+				animation: spin 4s linear infinite;
+			}
+			
+			.cd-container.selected .cd {
+				/* Remove this box-shadow to avoid double glow */
+				box-shadow: none;
+			}
+			
+			/* Ensure the glow is applied to the CD face only */
+			.cd-container.selected .cd-face {
+				box-shadow: 0 0 30px #00ff99, 0 0 50px #00ff99, 0 0 70px #00ff99;
+			}
+			
+			.cd-container.selected {
+				transform: scale(1.1);
+			}
+			
+			.cd-container.selected .cd-info {
+				color: #00ff99;
+				font-weight: bold;
+			}
+			
 			#start-button {
-				margin-top: 20px;
+				margin-top: 40px;
 				padding: 12px 30px;
 				background-color: #00ff99;
 				color: #000;
@@ -78,17 +266,22 @@
 				font-weight: bold;
 				cursor: pointer;
 				transition: transform 0.2s, background-color 0.3s;
+				display: none;
+				clear: both;
 			}
+			
 			#start-button:hover {
 				background-color: #00cc77;
 				transform: scale(1.05);
 			}
+			
 			#start-button:disabled {
 				background-color: #555;
 				color: #888;
 				cursor: not-allowed;
 				transform: none;
 			}
+			
 			#controls {
 				position: fixed;
 				bottom: 20px;
@@ -101,6 +294,7 @@
 				padding: 10px;
 				border-radius: 10px;
 			}
+			
 			button {
 				background-color: #333;
 				color: white;
@@ -110,13 +304,16 @@
 				border-radius: 5px;
 				transition: background-color 0.3s, transform 0.2s;
 			}
+			
 			button:hover {
 				background-color: #555;
 				transform: scale(1.05);
 			}
+			
 			button:active {
 				transform: scale(0.95);
 			}
+			
 			#info {
 				position: fixed;
 				top: 10px;
@@ -128,6 +325,7 @@
 				font-size: 14px;
 				z-index: 100;
 			}
+			
 			#view-controls {
 				position: fixed;
 				top: 10px;
@@ -138,10 +336,12 @@
 				border-radius: 5px;
 				z-index: 100;
 			}
+			
 			.control-icon {
 				font-size: 18px;
 				font-weight: bold;
 			}
+			
 			#back-to-menu {
 				position: fixed;
 				top: 10px;
@@ -161,14 +361,17 @@
 				transition: background-color 0.3s, transform 0.2s;
 				display: none; /* Initially hidden */
 			}
+			
 			#back-to-menu:hover {
 				background-color: rgba(255, 0, 0, 0.7);
 				transform: scale(1.1);
 			}
+			
 			.tooltip {
 				position: relative;
 				display: inline-block;
 			}
+			
 			.tooltip .tooltiptext {
 				visibility: hidden;
 				width: 120px;
@@ -186,6 +389,7 @@
 				transition: opacity 0.3s;
 				font-size: 12px;
 			}
+			
 			.tooltip:hover .tooltiptext {
 				visibility: visible;
 				opacity: 1;
@@ -193,19 +397,53 @@
 		</style>
 	</head>
 	<body>
+		<!-- Splash Screen -->
+		<div id="splash-screen">
+			<h1 id="splash-title">SoundScape Voyager</h1>
+			<p id="splash-subtitle">Embark on a musical journey through immersive 3D landscapes</p>
+			<button id="enter-button">Enter Experience</button>
+		</div>
+		
+		<!-- Loading Screen -->
 		<div id="loading">
-			<h1>Music Rollercoaster Visualization</h1>
+			<h1>SoundScape Voyager</h1>
 			
 			<div id="song-selection">
 				<h2>Select a Song</h2>
-				<div class="song-option" data-song="polo">
-					<h3>Polo</h3>
-					<p>Hip-hop track with dynamic energy levels</p>
+				
+				<!-- CD Selection -->
+				<div style="display: flex; justify-content: center; margin-bottom: 30px;">
+					<div class="cd-container" data-song="polo">
+						<div class="cd">
+							<div class="cd-face cd-front">
+								<div class="cd-label">
+									<h3>Polo</h3>
+									<p>Hip-hop</p>
+								</div>
+							</div>
+						</div>
+						<div class="cd-info">Dynamic energy levels</div>
+						<div class="cd-buttons">
+							<button class="preview-button">Preview</button>
+						</div>
+					</div>
+					
+					<div class="cd-container" data-song="chan">
+						<div class="cd">
+							<div class="cd-face cd-front">
+								<div class="cd-label">
+									<h3>Chan Chan</h3>
+									<p>Pop ballad</p>
+								</div>
+							</div>
+						</div>
+						<div class="cd-info">Emotional crescendos</div>
+						<div class="cd-buttons">
+							<button class="preview-button">Preview</button>
+						</div>
+					</div>
 				</div>
-				<div class="song-option" data-song="chan">
-					<h3>Chan Chan</h3>
-					<p>Pop ballad with emotional crescendos</p>
-				</div>
+				
 				<button id="start-button" disabled>Start Experience</button>
 			</div>
 			
@@ -269,27 +507,199 @@
 		</script>
 		<script type="module" src="./main.js"></script>
 		
-		<!-- Song selection script -->
+		<!-- Splash and CD selection script -->
 		<script>
-			// This script handles UI interactions for the song selection screen
-			// The actual song loading is handled in main.js
 			document.addEventListener('DOMContentLoaded', function() {
-				// Get song options and start button
-				const songOptions = document.querySelectorAll('.song-option');
+				// Splash screen
+				const splashScreen = document.getElementById('splash-screen');
+				const enterButton = document.getElementById('enter-button');
+				const loadingScreen = document.getElementById('loading');
+				
+				// CD selection
+				const cdContainers = document.querySelectorAll('.cd-container');
 				const startButton = document.getElementById('start-button');
 				
-				// Add hover effects
-				songOptions.forEach(option => {
-					option.addEventListener('mouseenter', function() {
-						this.style.transform = 'scale(1.05)';
+				// Audio preview elements
+				let previewAudio = null;
+				let currentlyPlaying = null;
+				
+				// Enter button click event
+				enterButton.addEventListener('click', function() {
+					// Fade out splash screen
+					splashScreen.style.opacity = '0';
+					setTimeout(() => {
+						splashScreen.style.display = 'none';
+						// Show loading screen
+						loadingScreen.style.display = 'flex';
+						
+						// Transfer the particles to the loading screen
+						const canvas = document.querySelector('#splash-screen canvas');
+						if (canvas) {
+							canvas.style.zIndex = '-1';
+							loadingScreen.appendChild(canvas);
+						}
+					}, 1000);
+				});
+				
+				// CD preview and selection
+				cdContainers.forEach(container => {
+					const songName = container.getAttribute('data-song');
+					const cd = container.querySelector('.cd');
+					const previewButton = container.querySelector('.preview-button');
+					
+					// Create audio element for preview
+					const audio = new Audio(`./audio/${songName}/preview.mp3`);
+					audio.volume = 0;
+					audio.loop = false;
+					
+					// Add ended event to handle when preview finishes
+					audio.addEventListener('ended', function() {
+						stopPreview();
 					});
 					
-					option.addEventListener('mouseleave', function() {
-						if (!this.classList.contains('selected')) {
-							this.style.transform = 'scale(1)';
+					// Make the CD clickable for selection
+					container.addEventListener('click', function(e) {
+						// Don't trigger if clicking on the preview button
+						if (e.target.classList.contains('preview-button') || 
+							e.target.closest('.preview-button')) {
+							return;
 						}
+						
+						// Remove selected class from all CDs
+						cdContainers.forEach(cd => {
+							cd.classList.remove('selected');
+						});
+						
+						// Add selected class to this CD
+						container.classList.add('selected');
+						
+						// Update selected song
+						window.selectedSong = songName;
+						
+						// Show start button
+						startButton.style.display = 'inline-block';
+						startButton.disabled = false;
+					});
+					
+					// Preview button click
+					previewButton.addEventListener('click', function(e) {
+						e.stopPropagation(); // Prevent triggering the CD click event
+						
+						// If this preview is already playing, stop it
+						if (currentlyPlaying === audio) {
+							stopPreview();
+							return;
+						}
+						
+						// Stop any currently playing preview
+						stopPreview();
+						
+						// Start this preview
+						audio.currentTime = 0;
+						audio.play().catch(e => console.log('Audio preview play prevented:', e));
+						fadeInAudio(audio);
+						
+						// Start CD spinning
+						cd.classList.add('spinning');
+						
+						// Update button state
+						previewButton.textContent = 'Stop';
+						previewButton.classList.add('playing');
+						
+						// Track currently playing
+						previewAudio = audio;
+						currentlyPlaying = audio;
 					});
 				});
+				
+				// Function to stop any playing preview
+				function stopPreview() {
+					if (previewAudio) {
+						fadeOutAudio(previewAudio);
+						
+						// Find the container with the currently playing preview
+						cdContainers.forEach(container => {
+							const button = container.querySelector('.preview-button');
+							const cd = container.querySelector('.cd');
+							
+							if (button.classList.contains('playing')) {
+								button.textContent = 'Preview';
+								button.classList.remove('playing');
+								cd.classList.remove('spinning');
+							}
+						});
+						
+						currentlyPlaying = null;
+					}
+				}
+				
+				// Start button click
+				startButton.addEventListener('click', function() {
+					// Stop any playing preview
+					stopPreview();
+					
+					// Get the selected song
+					if (window.selectedSong) {
+						// Hide song selection
+						document.getElementById('song-selection').style.display = 'none';
+						
+						// Update loading text
+						updateLoadingProgress(0, "Initializing...");
+						
+						// Start initialization
+						init();
+					}
+				});
+				
+				// Helper function to fade in audio
+				function fadeInAudio(audio) {
+					let volume = 0;
+					audio.volume = volume;
+					
+					const fadeInterval = setInterval(() => {
+						volume += 0.05;
+						if (volume >= 0.5) {
+							volume = 0.5;
+							clearInterval(fadeInterval);
+						}
+						audio.volume = volume;
+					}, 100);
+				}
+				
+				// Helper function to fade out audio
+				function fadeOutAudio(audio) {
+					let volume = audio.volume;
+					
+					const fadeInterval = setInterval(() => {
+						volume -= 0.05;
+						if (volume <= 0) {
+							volume = 0;
+							clearInterval(fadeInterval);
+							audio.pause();
+						}
+						audio.volume = volume;
+					}, 100);
+				}
+				
+				// Helper function for loading progress (used by start button)
+				function updateLoadingProgress(percent, message) {
+					const progressBar = document.getElementById('progress-bar');
+					const loadingText = document.getElementById('loading-text');
+					
+					if (progressBar) {
+						progressBar.style.width = `${percent}%`;
+					}
+					
+					if (loadingText && message) {
+						loadingText.textContent = message;
+					}
+				}
+				
+				// Expose init function for the start button
+				window.init = function() {
+					// This will be defined in main.js
+					console.log("Initialization requested");
+				};
 			});
 		</script>
 	</body>
