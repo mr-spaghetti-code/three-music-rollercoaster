@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Music Rollercoaster Visualization</title>
+		<style>
+			body { 
+				margin: 0;
+				overflow: hidden;
+				font-family: Arial, sans-serif;
+			}
+			#loading {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(0, 0, 0, 0.9);
+				color: white;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				z-index: 1000;
+			}
+			#progress {
+				width: 50%;
+				height: 20px;
+				background-color: #333;
+				border-radius: 10px;
+				margin-top: 20px;
+			}
+			#progress-bar {
+				height: 100%;
+				width: 0%;
+				background-color: #00ff99;
+				border-radius: 10px;
+				transition: width 0.3s;
+			}
+			#controls {
+				position: fixed;
+				bottom: 20px;
+				left: 50%;
+				transform: translateX(-50%);
+				z-index: 100;
+				display: flex;
+				gap: 10px;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 10px;
+				border-radius: 10px;
+			}
+			button {
+				background-color: #333;
+				color: white;
+				border: none;
+				padding: 10px 15px;
+				cursor: pointer;
+				border-radius: 5px;
+				transition: background-color 0.3s, transform 0.2s;
+			}
+			button:hover {
+				background-color: #555;
+				transform: scale(1.05);
+			}
+			button:active {
+				transform: scale(0.95);
+			}
+			#info {
+				position: fixed;
+				top: 10px;
+				left: 10px;
+				color: white;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 10px;
+				border-radius: 5px;
+				font-size: 14px;
+				z-index: 100;
+			}
+			#view-controls {
+				position: fixed;
+				top: 10px;
+				right: 10px;
+				color: white;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 10px;
+				border-radius: 5px;
+				z-index: 100;
+			}
+			.control-icon {
+				font-size: 18px;
+				font-weight: bold;
+			}
+			.tooltip {
+				position: relative;
+				display: inline-block;
+			}
+			.tooltip .tooltiptext {
+				visibility: hidden;
+				width: 120px;
+				background-color: black;
+				color: #fff;
+				text-align: center;
+				border-radius: 6px;
+				padding: 5px;
+				position: absolute;
+				z-index: 1;
+				bottom: 125%;
+				left: 50%;
+				margin-left: -60px;
+				opacity: 0;
+				transition: opacity 0.3s;
+				font-size: 12px;
+			}
+			.tooltip:hover .tooltiptext {
+				visibility: visible;
+				opacity: 1;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="loading">
+			<h1>Loading Music Rollercoaster</h1>
+			<div id="progress">
+				<div id="progress-bar"></div>
+			</div>
+			<p id="loading-text">Loading resources...</p>
+		</div>
+		
+		<div id="info">
+			<div>Zone: <span id="current-zone">Loading...</span></div>
+			<div>Energy: <span id="current-energy">0.00</span></div>
+			<div>Time: <span id="current-time">0:00</span></div>
+		</div>
+		
+		<div id="view-controls">
+			<button id="toggle-view" class="tooltip">
+				<span class="tooltiptext">Toggle View Mode (V)</span>
+				<span class="control-icon">👁️</span>
+			</button>
+			<button id="toggle-effects" class="tooltip">
+				<span class="tooltiptext">Toggle Psychedelic Effects</span>
+				<span class="control-icon">✨</span>
+			</button>
+		</div>
+		
+		<div id="controls">
+			<button id="skip-backward" class="tooltip">
+				<span class="tooltiptext">Skip Back 10s</span>
+				<span class="control-icon">⏪</span>
+			</button>
+			<button id="play-pause" class="tooltip">
+				<span class="tooltiptext">Play/Pause</span>
+				<span class="control-icon">▶️</span>
+			</button>
+			<button id="skip-forward" class="tooltip">
+				<span class="tooltiptext">Skip Forward 10s</span>
+				<span class="control-icon">⏩</span>
+			</button>
+			<button id="restart" class="tooltip">
+				<span class="tooltiptext">Restart</span>
+				<span class="control-icon">🔄</span>
+			</button>
+		</div>
+		
+		<!-- Load GSAP directly -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+		
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+					"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
+				}
+			}
+		</script>
+		<script type="module" src="./main.js"></script>
+	</body>
+</html>
