@@ -3,16 +3,11 @@ import librosa
 import scipy.signal
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d, median_filter
-import pygame
-import threading
-import time
-import matplotlib.animation as animation
-from matplotlib.widgets import Button
-from matplotlib.patches import Rectangle, Polygon
+from matplotlib.patches import Rectangle
 from matplotlib.collections import LineCollection
 from matplotlib.colors import LinearSegmentedColormap
-import colorsys
 import warnings
+import os
 
 # Suppress scikit-learn warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -574,18 +569,17 @@ def extract_energy_metric(audio_path, output_file=None, visualize=False):
         'onset_times': onset_times
     }
 
-def play_music_with_visualization(audio_path, output_file=None):
+def generate_static_visualization(audio_path, output_file=None):
     """
-    Play music while showing a real-time visualization of the energy curve with a moving dot.
+    Analyze an MP3 file and generate a static visualization saved as a PNG file.
     
     Parameters:
     - audio_path: Path to the MP3 file
-    - output_file: Optional path to save the energy values as CSV
-    """
-    # Initialize pygame for audio playback
-    pygame.init()
-    pygame.mixer.init()
+    - output_file: Optional path to save the PNG visualization (defaults to same name as audio file)
     
+    Returns:
+    - Path to the saved PNG file
+    """
     # Extract energy metrics and all features
     features = extract_energy_metric(audio_path, output_file=output_file, visualize=False)
     
@@ -604,9 +598,9 @@ def play_music_with_visualization(audio_path, output_file=None):
     drop_locations = features['drop_locations']
     onset_times = features['onset_times']
     
-    print(f"Preparing to play audio: {audio_path}")
+    print(f"Generating visualization for: {audio_path}")
     
-    # Setup the plot with more panels for visualization
+    # Setup the plot with panels for visualization
     fig = plt.figure(figsize=(16, 12))
     grid = plt.GridSpec(4, 1, height_ratios=[3, 1, 1, 1], hspace=0.4)
     
@@ -667,20 +661,15 @@ def play_music_with_visualization(audio_path, output_file=None):
         ax_energy.axvline(x=section_time, color='purple', linestyle='-', alpha=0.5, linewidth=1.5)
         ax_energy.text(section_time, 0.95, 'Section', rotation=90, fontsize=8, ha='right')
     
-    # Set up for animation
-    line_energy, = ax_energy.plot([], [], 'r-', linewidth=3)  # Energy curve up to current position
-    position_dot, = ax_energy.plot([], [], 'ro', markersize=10)  # Red dot for current position
-    
-    # Start in full view mode by default
+    # Set up energy plot
     ax_energy.set_xlim(0, duration)
     ax_energy.set_ylim(0, 1.1)
     ax_energy.set_title('3D Rollercoaster Energy Curve with Zones', fontsize=12)
     ax_energy.set_ylabel('Energy (0-1)')
     ax_energy.grid(True, alpha=0.3)
     
-    # 2. Plot the audio waveform with bar markers
+    # Plot the audio waveform with bar markers
     librosa.display.waveshow(audio_data, sr=sr, ax=ax_waveform, alpha=0.6)
-    waveform_position, = ax_waveform.plot([], [], 'r-', linewidth=2)  # Vertical line for current position
     
     # Add bar markers
     for bar_time in bar_boundaries:
@@ -689,7 +678,7 @@ def play_music_with_visualization(audio_path, output_file=None):
     ax_waveform.set_xlim(0, duration)
     ax_waveform.set_title('Audio Waveform with Bar Markers', fontsize=12)
     
-    # 3. Plot spectral features
+    # Plot spectral features
     # Use a color gradient to show chroma changes
     points = np.array([time_array, spectral_centroid]).T.reshape(-1, 1, 2)
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
@@ -707,14 +696,11 @@ def play_music_with_visualization(audio_path, output_file=None):
     for onset_time in onset_times:
         ax_features.axvline(x=onset_time, color='green', linestyle='-', alpha=0.3, linewidth=0.5)
     
-    # Set up for animation
-    features_position, = ax_features.plot([], [], 'r-', linewidth=2)  # Current position line
-    
     ax_features.set_xlim(0, duration)
     ax_features.set_ylim(0, 1.1)
     ax_features.set_title('Spectral Features (Centroid=color, Bandwidth=black) & Onsets', fontsize=12)
     
-    # 4. Plot structural information
+    # Plot structural information
     # Create a colormap for sections
     section_colors = plt.cm.tab10(np.linspace(0, 1, len(section_boundaries)+1))
     
@@ -742,251 +728,46 @@ def play_music_with_visualization(audio_path, output_file=None):
         ax_structure.text(midpoint, 0.5, f"Section {len(section_boundaries)+1}", 
                          horizontalalignment='center', verticalalignment='center', fontsize=10)
     
-    # Set up for animation
-    structure_position, = ax_structure.plot([], [], 'r-', linewidth=2)  # Current position line
-    
     ax_structure.set_xlim(0, duration)
     ax_structure.set_ylim(0, 1)
     ax_structure.set_title('Song Structure', fontsize=12)
     ax_structure.set_xlabel('Time (seconds)')
     
-    # Adjust layout - we won't use tight_layout() since it causes warnings
+    # Adjust layout
     fig.subplots_adjust(left=0.08, right=0.92, bottom=0.1, top=0.95, hspace=0.4)
     
-    # Variables for playback control and state
-    playback_state = {
-        'current_time': 0,
-        'full_view': True,  # Start in full view mode
-        'auto_scroll': False,  # Auto-scroll disabled in full view
-        'playback_active': True,
-        'force_refresh': False,
-    }
+    # Determine output filename if not provided
+    if output_file is None:
+        # Use the audio filename but with .png extension
+        base_name = os.path.splitext(os.path.basename(audio_path))[0]
+        output_dir = os.path.dirname(audio_path)
+        output_file = os.path.join(output_dir, f"{base_name}_visualization.png")
+    else:
+        # If output_file is provided but doesn't have .png extension, add it
+        if not output_file.lower().endswith('.png'):
+            output_file = f"{os.path.splitext(output_file)[0]}.png"
     
-    # Add control buttons with more horizontal spacing
-    button_width = 0.08
-    button_spacing = 0.02
-    button_y = 0.02
-    button_height = 0.04
+    # Save the figure
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close(fig)
     
-    # Skip backward button
-    ax_back_button = plt.axes([0.2, button_y, button_width, button_height])
-    back_button = Button(ax_back_button, '◀ -10s')
-    
-    # Pause/play button
-    ax_pause_button = plt.axes([0.3 + button_spacing, button_y, button_width, button_height])
-    pause_button = Button(ax_pause_button, 'Pause')
-    
-    # Skip forward button
-    ax_forward_button = plt.axes([0.4 + button_spacing*2, button_y, button_width, button_height])
-    forward_button = Button(ax_forward_button, '+10s ▶')
-    
-    # View toggle button
-    ax_view_button = plt.axes([0.5 + button_spacing*3, button_y, button_width, button_height])
-    view_button = Button(ax_view_button, 'Scroll View')  # Start in full view, so button says "Scroll View"
-    
-    def skip_backward(event):
-        # Get current position
-        current_time = pygame.mixer.music.get_pos() / 1000.0
-        # Skip back 10 seconds, but don't go below 0
-        new_time = max(0, current_time - 10)
-        
-        # Pygame doesn't have a reliable way to set absolute position, so restart
-        # from the beginning and skip forward to the new position
-        pygame.mixer.music.stop()
-        pygame.mixer.music.play(0)
-        
-        # For very short skips, we can just let it play
-        # For longer skips, we'll use pygame.mixer.music.set_pos
-        if new_time > 0.5:  # Only set position if we're skipping more than 0.5 seconds
-            pygame.mixer.music.set_pos(new_time)
-        
-        # Force refresh on next animation frame
-        playback_state['force_refresh'] = True
-        playback_state['current_time'] = new_time
-        
-        # Update scrolling view if needed
-        if not playback_state['full_view']:
-            window_size = 30
-            new_left = max(0, new_time - 5)
-            new_right = min(duration, new_left + window_size)
-            
-            ax_energy.set_xlim(new_left, new_right)
-            ax_waveform.set_xlim(new_left, new_right)
-            ax_features.set_xlim(new_left, new_right)
-            ax_structure.set_xlim(new_left, new_right)
-            plt.draw()
-    
-    def skip_forward(event):
-        # Get current position
-        current_time = pygame.mixer.music.get_pos() / 1000.0
-        # Skip forward 10 seconds, but don't exceed duration
-        new_time = min(duration - 0.5, current_time + 10)
-        
-        # Pygame doesn't have a reliable way to set absolute position, so restart
-        # from the beginning and skip forward to the new position
-        pygame.mixer.music.stop()
-        pygame.mixer.music.play(0)
-        
-        # Skip to the new position
-        if new_time > 0.5:  # Only set position if we're skipping more than 0.5 seconds
-            pygame.mixer.music.set_pos(new_time)
-        
-        # Force refresh on next animation frame
-        playback_state['force_refresh'] = True
-        playback_state['current_time'] = new_time
-        
-        # Update scrolling view if needed
-        if not playback_state['full_view']:
-            window_size = 30
-            new_left = max(0, new_time - 5)
-            new_right = min(duration, new_left + window_size)
-            
-            ax_energy.set_xlim(new_left, new_right)
-            ax_waveform.set_xlim(new_left, new_right)
-            ax_features.set_xlim(new_left, new_right)
-            ax_structure.set_xlim(new_left, new_right)
-            plt.draw()
-    
-    def toggle_playback(event):
-        if playback_state['playback_active']:
-            pygame.mixer.music.pause()
-            pause_button.label.set_text('Play')
-        else:
-            pygame.mixer.music.unpause()
-            pause_button.label.set_text('Pause')
-        playback_state['playback_active'] = not playback_state['playback_active']
-        plt.draw()  # Force redraw
-    
-    def toggle_view(event):
-        playback_state['full_view'] = not playback_state['full_view']
-        
-        if playback_state['full_view']:
-            # Show full song view
-            ax_energy.set_xlim(0, duration)
-            ax_waveform.set_xlim(0, duration)
-            ax_features.set_xlim(0, duration)
-            ax_structure.set_xlim(0, duration)
-            view_button.label.set_text('Scroll View')
-            playback_state['auto_scroll'] = False
-        else:
-            # Switch to scrolling view, focused on current position
-            current_time = pygame.mixer.music.get_pos() / 1000.0
-            if current_time < 0:
-                current_time = 0
-                
-            window_size = 30  # 30-second window
-            new_left = max(0, current_time - 5)
-            new_right = min(duration, new_left + window_size)
-            
-            ax_energy.set_xlim(new_left, new_right)
-            ax_waveform.set_xlim(new_left, new_right)
-            ax_features.set_xlim(new_left, new_right)
-            ax_structure.set_xlim(new_left, new_right)
-            view_button.label.set_text('Full View')
-            playback_state['auto_scroll'] = True
-        
-        plt.draw()  # Force redraw to update the view immediately
-    
-    # Connect button callbacks
-    back_button.on_clicked(skip_backward)
-    pause_button.on_clicked(toggle_playback)
-    forward_button.on_clicked(skip_forward)
-    view_button.on_clicked(toggle_view)
-    
-    # Convert audio data to pygame format
-    pygame.mixer.music.load(audio_path)
-    
-    # Animation function to update the plot
-    def update_plot(frame):
-        if not playback_state['playback_active'] and not playback_state['force_refresh']:
-            return position_dot, line_energy, waveform_position, features_position, structure_position
-        
-        # Get the current playback time
-        current_time = pygame.mixer.music.get_pos() / 1000.0  # Convert ms to seconds
-        
-        # If we've just skipped, use our stored time
-        if playback_state['force_refresh']:
-            current_time = playback_state['current_time']
-            playback_state['force_refresh'] = False
-            
-        if current_time < 0:  # Sometimes returns negative values when starting
-            current_time = 0
-            
-        # Update stored time
-        playback_state['current_time'] = current_time
-            
-        # Find the corresponding index in our data
-        idx = min(int(current_time * 24), len(energy_curve) - 1)
-        
-        if idx >= 0:
-            # Update the position of the red dot
-            position_dot.set_data([current_time], [energy_curve[idx]])
-            
-            # Update the highlighted portion of the energy curve
-            visible_idx = max(0, min(idx + 1, len(time_array)))
-            line_energy.set_data(time_array[:visible_idx], energy_curve[:visible_idx])
-            
-            # Update the position lines on all plots
-            waveform_position.set_data([current_time, current_time], [-1, 1])
-            features_position.set_data([current_time, current_time], [0, 1.1])
-            structure_position.set_data([current_time, current_time], [0, 1])
-            
-            # Auto-scroll all plots if approaching the right edge and in scroll view mode
-            if playback_state['auto_scroll'] and current_time > ax_energy.get_xlim()[1] - 5:
-                window_size = 30  # Show 30 seconds window
-                new_left = current_time - 5
-                new_right = current_time + window_size - 5
-                
-                # Don't scroll beyond the song duration
-                if new_right > duration:
-                    new_right = duration
-                    new_left = max(0, new_right - window_size)
-                
-                ax_energy.set_xlim(new_left, new_right)
-                ax_waveform.set_xlim(new_left, new_right)
-                ax_features.set_xlim(new_left, new_right)
-                ax_structure.set_xlim(new_left, new_right)
-                
-        return position_dot, line_energy, waveform_position, features_position, structure_position
-    
-    # Create the animation - fix the warning by setting save_count
-    # Estimate frames based on duration and FPS
-    max_frames = int(duration * 24)  # Assuming 24 fps matching our energy curve sampling rate
-    
-    ani = animation.FuncAnimation(
-        fig, update_plot, 
-        frames=max_frames,  # Set explicit frame count
-        interval=20, 
-        blit=True, 
-        repeat=False,
-        cache_frame_data=False  # Disable frame caching to save memory
-    )
-    
-    # Start playback
-    pygame.mixer.music.play(0)
-    
-    # Show the plot
-    plt.show()
-    
-    # Stop playback when the plot is closed
-    pygame.mixer.music.stop()
-    pygame.mixer.quit()
-    pygame.quit()
+    print(f"Visualization saved to: {output_file}")
+    return output_file
 
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Extract energy metrics from music files")
     parser.add_argument("audio_file", help="Path to the audio file (MP3, WAV, etc.)")
-    parser.add_argument("--output", "-o", help="Output CSV file path")
+    parser.add_argument("--output", "-o", help="Output file path (for CSV data and PNG visualization)")
     parser.add_argument("--visualize", "-v", action="store_true", help="Visualize the energy curve")
-    parser.add_argument("--play", "-p", action="store_true", help="Play audio with real-time visualization")
+    parser.add_argument("--png", "-p", action="store_true", help="Generate PNG visualization")
     
     args = parser.parse_args()
     
-    if args.play:
-        # Play music with visualization
-        play_music_with_visualization(args.audio_file, args.output)
+    if args.png:
+        # Generate static PNG visualization
+        generate_static_visualization(args.audio_file, args.output)
     else:
         # Just analyze and optionally visualize
         features = extract_energy_metric(

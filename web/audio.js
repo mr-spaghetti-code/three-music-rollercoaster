@@ -7,11 +7,11 @@ import { findClosestTimeIndex } from './utils.js';
 let audioElement, audioContext, audioSource, analyser;
 
 // Initialize audio
-export function setupAudio() {
+export function setupAudio(song = 'polo') {
     return new Promise((resolve, reject) => {
         try {
-            // Create audio element
-            audioElement = new Audio('audio/polo.mp3');
+            // Create audio element with the selected song
+            audioElement = new Audio(`audio/${song}.mp3`);
             audioElement.crossOrigin = 'anonymous';
             
             // Create audio context
@@ -35,17 +35,17 @@ export function setupAudio() {
             
             // Add event for when audio is ready
             audioElement.addEventListener('canplaythrough', () => {
-                console.log("Audio loaded and ready to play");
+                console.log(`Audio loaded and ready to play: ${song}.mp3`);
                 resolve({ audioElement, audioContext, audioSource, analyser });
             });
             
             // Handle loading errors
             audioElement.addEventListener('error', (err) => {
-                console.error("Audio loading error:", err);
+                console.error(`Audio loading error for ${song}.mp3:`, err);
                 reject(err);
             });
             
-            console.log("Audio setup initiated");
+            console.log(`Audio setup initiated for ${song}.mp3`);
             
         } catch (error) {
             console.error("Error setting up audio:", error);
@@ -224,4 +224,41 @@ export function getAudioContext() {
 // Get the analyser
 export function getAnalyser() {
     return analyser;
+}
+
+// Clean up audio resources
+export function cleanupAudio() {
+    if (audioElement) {
+        // Stop audio if playing
+        if (!audioElement.paused) {
+            audioElement.pause();
+        }
+        
+        // Remove event listeners
+        audioElement.removeEventListener('timeupdate', updatePositionFromTime);
+        audioElement.removeEventListener('ended', () => {});
+        audioElement.removeEventListener('canplaythrough', () => {});
+        audioElement.removeEventListener('error', () => {});
+        
+        // Disconnect audio nodes
+        if (audioSource) {
+            audioSource.disconnect();
+        }
+        
+        if (analyser) {
+            analyser.disconnect();
+        }
+        
+        if (audioContext && audioContext.state !== 'closed') {
+            audioContext.close();
+        }
+        
+        // Reset variables
+        audioElement = null;
+        audioContext = null;
+        audioSource = null;
+        analyser = null;
+        
+        console.log("Audio resources cleaned up");
+    }
 } 

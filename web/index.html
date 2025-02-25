@@ -22,6 +22,7 @@
 				justify-content: center;
 				align-items: center;
 				z-index: 1000;
+				transition: opacity 0.5s ease;
 			}
 			#progress {
 				width: 50%;
@@ -36,6 +37,57 @@
 				background-color: #00ff99;
 				border-radius: 10px;
 				transition: width 0.3s;
+			}
+			#song-selection {
+				margin: 30px 0;
+				text-align: center;
+			}
+			.song-option {
+				display: inline-block;
+				margin: 0 15px;
+				padding: 15px 25px;
+				background-color: #333;
+				border-radius: 10px;
+				cursor: pointer;
+				transition: transform 0.2s, background-color 0.3s;
+			}
+			.song-option:hover {
+				background-color: #555;
+				transform: scale(1.05);
+			}
+			.song-option.selected {
+				background-color: #00ff99;
+				color: #000;
+			}
+			.song-option h3 {
+				margin: 0 0 10px 0;
+			}
+			.song-option p {
+				margin: 0;
+				font-size: 14px;
+				opacity: 0.8;
+			}
+			#start-button {
+				margin-top: 20px;
+				padding: 12px 30px;
+				background-color: #00ff99;
+				color: #000;
+				border: none;
+				border-radius: 30px;
+				font-size: 16px;
+				font-weight: bold;
+				cursor: pointer;
+				transition: transform 0.2s, background-color 0.3s;
+			}
+			#start-button:hover {
+				background-color: #00cc77;
+				transform: scale(1.05);
+			}
+			#start-button:disabled {
+				background-color: #555;
+				color: #888;
+				cursor: not-allowed;
+				transform: none;
 			}
 			#controls {
 				position: fixed;
@@ -90,6 +142,29 @@
 				font-size: 18px;
 				font-weight: bold;
 			}
+			#back-to-menu {
+				position: fixed;
+				top: 10px;
+				right: 90px;
+				background-color: rgba(0, 0, 0, 0.5);
+				color: white;
+				width: 36px;
+				height: 36px;
+				border-radius: 50%;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				cursor: pointer;
+				font-size: 20px;
+				font-weight: bold;
+				z-index: 100;
+				transition: background-color 0.3s, transform 0.2s;
+				display: none; /* Initially hidden */
+			}
+			#back-to-menu:hover {
+				background-color: rgba(255, 0, 0, 0.7);
+				transform: scale(1.1);
+			}
 			.tooltip {
 				position: relative;
 				display: inline-block;
@@ -119,11 +194,25 @@
 	</head>
 	<body>
 		<div id="loading">
-			<h1>Loading Music Rollercoaster</h1>
+			<h1>Music Rollercoaster Visualization</h1>
+			
+			<div id="song-selection">
+				<h2>Select a Song</h2>
+				<div class="song-option" data-song="polo">
+					<h3>Polo</h3>
+					<p>Hip-hop track with dynamic energy levels</p>
+				</div>
+				<div class="song-option" data-song="chan">
+					<h3>Chan Chan</h3>
+					<p>Pop ballad with emotional crescendos</p>
+				</div>
+				<button id="start-button" disabled>Start Experience</button>
+			</div>
+			
 			<div id="progress">
 				<div id="progress-bar"></div>
 			</div>
-			<p id="loading-text">Loading resources...</p>
+			<p id="loading-text">Select a song to begin...</p>
 		</div>
 		
 		<div id="info">
@@ -141,6 +230,11 @@
 				<span class="tooltiptext">Toggle Psychedelic Effects</span>
 				<span class="control-icon">✨</span>
 			</button>
+		</div>
+		
+		<div id="back-to-menu" class="tooltip">
+			<span class="tooltiptext">Back to Song Selection</span>
+			X
 		</div>
 		
 		<div id="controls">
@@ -174,5 +268,29 @@
 			}
 		</script>
 		<script type="module" src="./main.js"></script>
+		
+		<!-- Song selection script -->
+		<script>
+			// This script handles UI interactions for the song selection screen
+			// The actual song loading is handled in main.js
+			document.addEventListener('DOMContentLoaded', function() {
+				// Get song options and start button
+				const songOptions = document.querySelectorAll('.song-option');
+				const startButton = document.getElementById('start-button');
+				
+				// Add hover effects
+				songOptions.forEach(option => {
+					option.addEventListener('mouseenter', function() {
+						this.style.transform = 'scale(1.05)';
+					});
+					
+					option.addEventListener('mouseleave', function() {
+						if (!this.classList.contains('selected')) {
+							this.style.transform = 'scale(1)';
+						}
+					});
+				});
+			});
+		</script>
 	</body>
 </html>

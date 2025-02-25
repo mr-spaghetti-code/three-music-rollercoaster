@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { colors, state, particleCount, getZoneNameFromValue, getZoneDisplayName, zoneCount } from './config.js';
-import { setupAudio, getAudioData, getAudioElement, togglePlayPause, restartRide, skipForward, skipBackward } from './audio.js';
+import { setupAudio, getAudioData, getAudioElement, togglePlayPause, restartRide, skipForward, skipBackward, cleanupAudio } from './audio.js';
 import { setupCamera, updateCameraPosition, updateControls, handleResize, getCamera, toggleViewMode } from './camera.js';
 import { createRollercoaster, getRollercoasterPath, createLightOrbs, updateLightOrbs } from './rollercoaster.js';
 import { createEnvironments, toggleZoneVisibility, setupLighting, createParticleSystem } from './environments.js';
@@ -19,13 +19,158 @@ let energyData = [], structureData = [], zoneData = [];
 let animatedObjects = [];
 let particleSystem;
 
+// Selected song
+let selectedSong = null;
+
+// Animation state
+let isAnimating = false;
+
 // Setup event listeners
-window.addEventListener('DOMContentLoaded', init);
+window.addEventListener('DOMContentLoaded', setupSongSelection);
 window.addEventListener('resize', handleWindowResize);
+
+// Handle back to menu button
+function setupBackToMenuButton() {
+    const backButton = document.getElementById('back-to-menu');
+    if (backButton) {
+        backButton.addEventListener('click', () => {
+            console.log("Back to song selection menu clicked");
+            
+            // Hide back button
+            backButton.style.display = 'none';
+            
+            // Show song selection menu with proper opacity and display settings
+            const loadingScreen = document.getElementById('loading');
+            loadingScreen.style.display = 'flex';
+            loadingScreen.style.opacity = '1';
+            document.getElementById('song-selection').style.display = 'block';
+            document.getElementById('loading-text').textContent = 'Select a song to begin...';
+            document.getElementById('progress-bar').style.width = '0%';
+            
+            // Clean up resources
+            cleanupResources();
+            
+            // Reset state
+            selectedSong = null;
+            
+            // Disable start button until a song is selected
+            document.getElementById('start-button').disabled = true;
+            
+            // Remove selected class from all song options
+            document.querySelectorAll('.song-option').forEach(opt => opt.classList.remove('selected'));
+        });
+    }
+}
+
+// Clean up resources when going back to menu
+function cleanupResources() {
+    // Stop animation loop
+    isAnimating = false;
+    
+    // Clean up audio resources
+    cleanupAudio();
+    
+    // Clear arrays
+    energyData = [];
+    structureData = [];
+    zoneData = [];
+    animatedObjects = [];
+    
+    // Dispose of Three.js objects if they exist
+    if (scene) {
+        // Remove all objects from the scene
+        while(scene.children.length > 0) { 
+            const object = scene.children[0];
+            scene.remove(object);
+            
+            // Properly dispose of geometries and materials
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(material => material.dispose());
+                } else {
+                    object.material.dispose();
+                }
+            }
+        }
+        
+        // Clear the scene
+        scene = null;
+    }
+    
+    // Dispose of renderer if it exists
+    if (renderer) {
+        // Remove the canvas from the DOM
+        const container = document.getElementById('canvas-container');
+        if (container && container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+        
+        renderer.dispose();
+        renderer = null;
+    }
+    
+    // Dispose of composer if it exists
+    if (composer) {
+        composer.passes.forEach(pass => {
+            if (pass.dispose) pass.dispose();
+        });
+        composer = null;
+    }
+    
+    // Reset clock
+    clock = null;
+    
+    // Reset particle system
+    particleSystem = null;
+    
+    console.log("Resources cleaned up");
+}
+
+// Setup song selection
+function setupSongSelection() {
+    console.log("Setting up song selection");
+    
+    // Get song options and start button
+    const songOptions = document.querySelectorAll('.song-option');
+    const startButton = document.getElementById('start-button');
+    
+    // Add click event to song options
+    songOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            // Remove selected class from all options
+            songOptions.forEach(opt => opt.classList.remove('selected'));
+            
+            // Add selected class to clicked option
+            option.classList.add('selected');
+            
+            // Get selected song
+            selectedSong = option.getAttribute('data-song');
+            console.log(`Selected song: ${selectedSong}`);
+            
+            // Enable start button
+            startButton.disabled = false;
+        });
+    });
+    
+    // Add click event to start button
+    startButton.addEventListener('click', () => {
+        if (selectedSong) {
+            // Hide song selection
+            document.getElementById('song-selection').style.display = 'none';
+            
+            // Update loading text
+            updateLoadingProgress(0, "Initializing...");
+            
+            // Start initialization
+            init();
+        }
+    });
+}
 
 // Initialize the application
 async function init() {
-    console.log("Initializing Music Rollercoaster Visualization");
+    console.log(`Initializing Music Rollercoaster Visualization for song: ${selectedSong}`);
     updateLoadingProgress(0, "Initializing...");
     
     // Setup Three.js scene, renderer and camera
@@ -45,6 +190,9 @@ async function init() {
     
     // Hide loading screen and setup control event listeners
     finishLoading();
+    
+    // Set animation state to true
+    isAnimating = true;
     
     // Start animation loop
     animate();
@@ -101,7 +249,7 @@ function setupScene() {
 async function setupAudioWithProgress() {
     updateLoadingProgress(20, "Loading audio...");
     try {
-        await setupAudio();
+        await setupAudio(selectedSong);
         updateLoadingProgress(40, "Audio loaded!");
     } catch (error) {
         console.error("Error loading audio:", error);
@@ -111,11 +259,14 @@ async function setupAudioWithProgress() {
 
 // Load data files with progress tracking
 async function loadDataWithProgress() {
+    // Determine the data directory based on the selected song
+    const dataDir = `data/${selectedSong}/`;
+    
     // Load energy data
     updateLoadingProgress(45, "Loading energy data...");
     energyData = await new Promise(resolve => {
-        loadData('data/energy_values_energy.csv', 'energy', (type, data) => {
-            console.log(`Received ${data.length} energy data points`);
+        loadData(`${dataDir}energy_values_energy.csv`, 'energy', (type, data) => {
+            console.log(`Received ${data.length} energy data points for ${selectedSong}`);
             resolve(data);
         });
     });
@@ -123,8 +274,8 @@ async function loadDataWithProgress() {
     // Load structure data
     updateLoadingProgress(55, "Loading structure data...");
     structureData = await new Promise(resolve => {
-        loadData('data/energy_values_structure.csv', 'structure', (type, data) => {
-            console.log(`Received ${data.length} structure data points`);
+        loadData(`${dataDir}energy_values_structure.csv`, 'structure', (type, data) => {
+            console.log(`Received ${data.length} structure data points for ${selectedSong}`);
             resolve(data);
         });
     });
@@ -132,11 +283,11 @@ async function loadDataWithProgress() {
     // Load zone data
     updateLoadingProgress(65, "Loading zone data...");
     zoneData = await new Promise(resolve => {
-        loadData('data/energy_values_zones.csv', 'zones', (type, data) => {
-            console.log(`Received ${data.length} zone data points`);
+        loadData(`${dataDir}energy_values_zones.csv`, 'zones', (type, data) => {
+            console.log(`Received ${data.length} zone data points for ${selectedSong}`);
             // Log some zone values to verify
             if (data.length > 0) {
-                console.log("Zone data examples:");
+                console.log(`Zone data examples for ${selectedSong}:`);
                 console.log("First zone:", data[0]);
                 console.log("Middle zone:", data[Math.floor(data.length/2)]);
                 console.log("Last zone:", data[data.length-1]);
@@ -157,11 +308,11 @@ async function loadDataWithProgress() {
     
     // Log some samples to verify data
     if (energyData.length > 0) {
-        console.log("Energy data sample:", energyData[0], energyData[Math.floor(energyData.length/2)]);
+        console.log(`Energy data sample for ${selectedSong}:`, energyData[0], energyData[Math.floor(energyData.length/2)]);
     }
     
     updateLoadingProgress(70, "Data loaded!");
-    console.log(`Loaded ${energyData.length} energy data points, ${structureData.length} structure data points, and ${zoneData.length} zone data points`);
+    console.log(`Loaded ${energyData.length} energy data points, ${structureData.length} structure data points, and ${zoneData.length} zone data points for ${selectedSong}`);
 }
 
 // Create rollercoaster, environments, and visual elements
@@ -211,6 +362,9 @@ function finishLoading() {
         setTimeout(() => {
             document.getElementById('loading').style.display = "none";
             
+            // Show back to menu button
+            document.getElementById('back-to-menu').style.display = "flex";
+            
             // // Auto-play when everything is loaded
             // console.log("Auto-starting playback");
             // togglePlayPause();
@@ -224,6 +378,9 @@ function finishLoading() {
     document.getElementById('skip-backward').addEventListener('click', skipBackward);
     document.getElementById('toggle-view').addEventListener('click', () => toggleViewMode(getRollercoasterPath(), getAudioElement()));
     document.getElementById('toggle-effects').addEventListener('click', togglePsychedelicEffects);
+    
+    // Setup back to menu button
+    setupBackToMenuButton();
     
     // Setup keyboard controls
     window.addEventListener('keydown', handleKeyDown);
@@ -258,6 +415,9 @@ function handleKeyDown(event) {
             break;
         case 'p': // Toggle psychedelic effects
             togglePsychedelicEffects();
+            break;
+        case 'Escape': // Go back to menu
+            document.getElementById('back-to-menu').click();
             break;
     }
 }
@@ -338,6 +498,9 @@ function updateUIIndicators(currentTime, energyData, currentIndex) {
 
 // Animation loop
 function animate() {
+    // Stop animation if we're not animating anymore
+    if (!isAnimating) return;
+    
     requestAnimationFrame(animate);
     
     // Get delta time
@@ -359,7 +522,7 @@ function animate() {
         const audioData = getAudioData();
         
         // Update scene fog color based on current zone
-        if (scene.fog && state.currentZone) {
+        if (scene && scene.fog && state.currentZone) {
             // Get fog color from the zone palette
             const zoneKey = state.currentZone + 'Zone';
             if (colors[zoneKey] && colors[zoneKey].fogColor) {
@@ -407,7 +570,7 @@ function animate() {
     // Render scene with post-processing
     if (composer) {
         composer.render();
-    } else {
+    } else if (renderer && scene) {
         renderer.render(scene, getCamera());
     }
 }
