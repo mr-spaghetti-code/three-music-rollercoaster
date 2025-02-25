@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { colors, state, particleCount, getZoneNameFromValue, getZoneDisplayName, zoneCount } from './config.js';
+import { colors, state, particleCount, getZoneNameFromValue, getZoneDisplayName, zoneCount, config } from './config.js';
 import { setupAudio, getAudioData, getAudioElement, togglePlayPause, restartRide, skipForward, skipBackward, cleanupAudio } from './audio.js';
 import { setupCamera, updateCameraPosition, updateControls, handleResize, getCamera, toggleViewMode } from './camera.js';
 import { createRollercoaster, getRollercoasterPath, createLightOrbs, updateLightOrbs } from './rollercoaster.js';
@@ -24,6 +24,7 @@ let selectedSong = null;
 
 // Animation state
 let isAnimating = false;
+let isIntroAnimationActive = false;
 
 // Splash screen animation
 let splashScene, splashCamera, splashRenderer, splashClock;
@@ -420,9 +421,9 @@ function finishLoading() {
             // Clean up splash screen resources
             cleanupSplashScreen();
             
-            // Auto-play when everything is loaded
-            console.log("Auto-starting playback");
-            togglePlayPause();
+            // Start intro animation instead of immediately auto-playing
+            console.log("Starting intro animation");
+            startIntroAnimation();
         }, 500);
     }, 500);
     
@@ -438,6 +439,605 @@ function finishLoading() {
     window.addEventListener('keydown', handleKeyDown);
     
     console.log("Loading complete, controls initialized");
+}
+
+// Early in the file, add a function to create the fade overlay
+function createFadeOverlay() {
+    // Create the fade overlay element if it doesn't exist
+    let fadeOverlay = document.getElementById('fade-overlay');
+    if (!fadeOverlay) {
+        fadeOverlay = document.createElement('div');
+        fadeOverlay.id = 'fade-overlay';
+        fadeOverlay.style.position = 'fixed';
+        fadeOverlay.style.top = '0';
+        fadeOverlay.style.left = '0';
+        fadeOverlay.style.width = '100%';
+        fadeOverlay.style.height = '100%';
+        fadeOverlay.style.backgroundColor = 'white';
+        fadeOverlay.style.opacity = '0';
+        fadeOverlay.style.pointerEvents = 'none'; // Don't block user interaction
+        fadeOverlay.style.zIndex = '2500'; // Increased to be above everything
+        fadeOverlay.style.transition = 'opacity 2.5s cubic-bezier(0.4, 0.0, 0.2, 1)'; // Much slower transition (changed from 0.5s to 2.5s)
+        fadeOverlay.style.boxShadow = 'inset 0 0 100px rgba(255,255,255,0.9)'; // Add glow effect
+        document.body.appendChild(fadeOverlay);
+        console.log("Fade overlay created");
+    }
+    return fadeOverlay;
+}
+
+// Make the fade effect more dramatic and reliable with improved transitions
+function fadeToWhite(duration = 300) {
+    console.log("Fading to white");
+    const fadeOverlay = createFadeOverlay();
+    
+    // Remove transition temporarily for instant flash
+    fadeOverlay.style.transition = 'none';
+    
+    // Force DOM reflow so the transition removal takes effect
+    fadeOverlay.offsetHeight;
+    
+    // Make it fully visible
+    fadeOverlay.style.opacity = '1';
+    
+    // Force another reflow to ensure the opacity change applies immediately
+    fadeOverlay.offsetHeight;
+    
+    // Add transition back for smooth fade out later
+    fadeOverlay.style.transition = 'opacity 0.5s cubic-bezier(0.4, 0.0, 0.2, 1)';
+    
+    // Also add the CSS animation as a backup
+    document.body.classList.add('flash-white');
+    setTimeout(() => {
+        document.body.classList.remove('flash-white');
+    }, duration + 200); // Longer than our transition
+    
+    return new Promise(resolve => setTimeout(resolve, duration));
+}
+
+function fadeFromWhite(duration = 1500) { // Increased from 400ms to 1500ms
+    console.log("Fading from white");
+    const fadeOverlay = createFadeOverlay();
+    
+    // Ensure the overlay is visible before fading
+    if (parseFloat(fadeOverlay.style.opacity) < 0.9) {
+        // If it's not fully visible, make it visible first
+        fadeOverlay.style.transition = 'none';
+        fadeOverlay.style.opacity = '1';
+        fadeOverlay.offsetHeight; // Force reflow
+    }
+    
+    // Add a slight delay to ensure the white is visible
+    setTimeout(() => {
+        fadeOverlay.style.transition = 'opacity 3.5s cubic-bezier(0.4, 0.0, 0.2, 1)'; // Much slower fade out (changed from 0.8s to 3.5s)
+        fadeOverlay.style.opacity = '0';
+    }, 100); // Increased delay from 50ms to 100ms
+    
+    return new Promise(resolve => setTimeout(resolve, duration + 500)); // Added more time for the transition (from 100ms to 500ms extra)
+}
+
+// Intro animation - camera flies in from top of sphere to the track
+function startIntroAnimation() {
+    console.log("Starting intro animation...");
+    
+    // Set intro animation active state
+    isIntroAnimationActive = true;
+    
+    // Get the camera and rollercoaster path
+    const camera = getCamera();
+    let path = getRollercoasterPath();
+    
+    // Check if we have valid camera and path
+    if (!camera) {
+        console.error("Camera not found, cannot start intro animation");
+        return;
+    }
+    
+    if (!path) {
+        console.error("Rollercoaster path not found, creating a fallback path");
+        // Create a simple fallback path - a circle
+        const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(0, 0, -50),
+            new THREE.Vector3(50, 0, 0),
+            new THREE.Vector3(0, 0, 50),
+            new THREE.Vector3(-50, 0, 0),
+            new THREE.Vector3(0, 0, -50)
+        ]);
+        curve.closed = true;
+        path = curve;
+    }
+    
+    console.log("Camera and path found, setting up animation");
+    
+    // Temporarily disable first person controls during intro animation
+    const originalFirstPersonMode = state.firstPersonMode;
+    state.firstPersonMode = false;
+    
+    // Set initial camera position much farther away for a better overview of the scene
+    camera.position.set(0, 2000, 2000); // Dramatically increased distance from (0, 800, 800) to (0, 2000, 2000)
+    camera.lookAt(0, 0, 0);
+    
+    // Add a slight initial rotation for more dynamic feel
+    camera.rotation.z = THREE.MathUtils.degToRad(5); // Reduced rotation for better initial view
+    
+    // Get the starting point on the rollercoaster
+    let startPoint;
+    try {
+        startPoint = path.getPointAt(0);
+        console.log("Start point on path:", startPoint);
+    } catch (error) {
+        console.error("Error getting start point:", error);
+        startPoint = new THREE.Vector3(0, 0, 0);
+    }
+    
+    // Store original fog density and increase it for dramatic effect
+    let originalFogDensity = 0.01;
+    if (scene.fog && scene.fog.density) {
+        originalFogDensity = scene.fog.density;
+        scene.fog.density = 0.005; // Reduced fog density for better initial view
+    }
+    
+    // Create a timeline for the intro animation
+    const duration = 8.0; // Increased to 8 seconds for a more gradual transition
+    const startTime = clock.getElapsedTime();
+    console.log("Animation start time:", startTime);
+    
+    // Create a flag to track if animation is complete
+    let introAnimationComplete = false;
+    
+    // Hide UI elements during intro animation
+    document.getElementById('info').style.opacity = '0';
+    document.getElementById('controls').style.opacity = '0';
+    document.getElementById('view-controls').style.opacity = '0';
+    document.getElementById('back-to-menu').style.opacity = '0';
+    
+    // Prepare audio for immediate playback
+    const audioElement = getAudioElement();
+    if (audioElement) {
+        // Start audio immediately at full volume
+        audioElement.currentTime = 0;
+        audioElement.volume = 1.0;
+        
+        // Start playing immediately
+        audioElement.play().catch(e => {
+            console.warn("Could not auto-play audio:", e);
+            // Try again with user interaction
+            document.addEventListener('click', function playOnClick() {
+                audioElement.play();
+                document.removeEventListener('click', playOnClick);
+            }, { once: true });
+        });
+        
+        // Update play/pause button to show pause icon
+        const playPauseButton = document.getElementById('play-pause');
+        if (playPauseButton) {
+            playPauseButton.querySelector('.control-icon').textContent = '⏸️';
+        }
+        
+        // Update state to playing
+        state.isPlaying = true;
+    } else {
+        console.warn("Audio element not found for intro animation");
+    }
+    
+    // Create fade overlay early so it's available for the entire experience
+    createFadeOverlay();
+    
+    // Create an animation function
+    function animateIntro() {
+        if (introAnimationComplete) return;
+        
+        const currentTime = clock.getElapsedTime();
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1.0);
+        
+        // Log progress occasionally
+        if (Math.random() < 0.01) {
+            console.log(`Intro animation progress: ${(progress * 100).toFixed(1)}%`);
+        }
+        
+        // Use easing for smoother animation
+        const eased = 1 - Math.pow(1 - progress, 3); // Cubic ease-out
+        
+        if (progress < 1.0) {
+            try {
+                // Animate camera position from far away to the track
+                const targetPosition = new THREE.Vector3();
+                
+                // Get position on the path at the beginning
+                let pathPosition;
+                try {
+                    // Get the current position on the path based on audio time
+                    if (audioElement && energyData.length > 0) {
+                        const normalizedPosition = findClosestTimeIndex(audioElement.currentTime, energyData) / energyData.length;
+                        pathPosition = path.getPointAt(Math.min(normalizedPosition, 0.99));
+                    } else {
+                        pathPosition = path.getPointAt(0);
+                    }
+                } catch (error) {
+                    console.error("Error getting path position:", error);
+                    pathPosition = new THREE.Vector3(0, 0, 0);
+                }
+                
+                // Calculate tangent for orientation
+                let tangent;
+                try {
+                    // Get tangent at the current audio position
+                    if (audioElement && energyData.length > 0) {
+                        const normalizedPosition = findClosestTimeIndex(audioElement.currentTime, energyData) / energyData.length;
+                        tangent = path.getTangentAt(Math.min(normalizedPosition, 0.99));
+                    } else {
+                        tangent = path.getTangentAt(0);
+                    }
+                } catch (error) {
+                    console.error("Error getting path tangent:", error);
+                    tangent = new THREE.Vector3(1, 0, 0);
+                }
+                
+                // Get normal and binormal vectors to position camera above the track
+                const normal = new THREE.Vector3();
+                const binormal = new THREE.Vector3();
+                const up = new THREE.Vector3(0, 1, 0);
+                
+                // Get the normal by crossing tangent with global up vector
+                // and then cross again with tangent to ensure orthogonality
+                binormal.crossVectors(tangent, up).normalize();
+                normal.crossVectors(binormal, tangent).normalize();
+                
+                // Position camera above the track (along the normal vector)
+                const heightAboveTrack = 4; // Same as config.defaultHeightAboveTrack
+                
+                // Calculate the first-person position and orientation for smooth transition
+                // This is similar to what updateCameraPosition does in camera.js
+                const firstPersonPosition = new THREE.Vector3().copy(pathPosition).add(
+                    normal.clone().multiplyScalar(heightAboveTrack)
+                );
+                
+                // Calculate the first-person look-at point (looking ahead on the track)
+                const lookAheadPosition = Math.min(
+                    (findClosestTimeIndex(audioElement.currentTime, energyData) / energyData.length) + 0.01, 
+                    0.99
+                );
+                const firstPersonLookAt = path.getPointAt(lookAheadPosition);
+                
+                // For the final 20% of the animation, start blending to the first-person position
+                let targetPoint, lookAtPoint;
+                
+                if (progress > 0.8) {
+                    // Calculate blend factor for the last 20% of animation (0 to 1)
+                    const blendFactor = (progress - 0.8) / 0.2;
+                    
+                    // Create a curved path for more dramatic effect
+                    // Start high and far away, then swoop in
+                    const curveX = THREE.MathUtils.lerp(0, firstPersonPosition.x, eased);
+                    const curveY = THREE.MathUtils.lerp(2000, firstPersonPosition.y, eased);
+                    const curveZ = THREE.MathUtils.lerp(2000, firstPersonPosition.z, eased);
+                    
+                    // Add a slight arc to the camera path
+                    const arcHeight = 400 * (1 - eased) * Math.sin(eased * Math.PI);
+                    
+                    // Blend between the intro animation path and the first-person position
+                    camera.position.x = THREE.MathUtils.lerp(curveX, firstPersonPosition.x, blendFactor);
+                    camera.position.y = THREE.MathUtils.lerp(curveY + arcHeight, firstPersonPosition.y, blendFactor);
+                    camera.position.z = THREE.MathUtils.lerp(curveZ, firstPersonPosition.z, blendFactor);
+                    
+                    // Blend the look-at point
+                    const centerPoint = new THREE.Vector3(0, 0, 0);
+                    lookAtPoint = new THREE.Vector3();
+                    lookAtPoint.x = THREE.MathUtils.lerp(
+                        THREE.MathUtils.lerp(centerPoint.x, firstPersonLookAt.x, eased),
+                        firstPersonLookAt.x, 
+                        blendFactor
+                    );
+                    lookAtPoint.y = THREE.MathUtils.lerp(
+                        THREE.MathUtils.lerp(centerPoint.y, firstPersonLookAt.y, eased),
+                        firstPersonLookAt.y, 
+                        blendFactor
+                    );
+                    lookAtPoint.z = THREE.MathUtils.lerp(
+                        THREE.MathUtils.lerp(centerPoint.z, firstPersonLookAt.z, eased),
+                        firstPersonLookAt.z, 
+                        blendFactor
+                    );
+                    
+                    // Blend camera roll
+                    camera.rotation.z = THREE.MathUtils.lerp(
+                        THREE.MathUtils.lerp(THREE.MathUtils.degToRad(5), 0, eased),
+                        0,
+                        blendFactor
+                    );
+                } else {
+                    // Regular intro animation path for the first 80%
+                    const targetPoint = new THREE.Vector3().copy(pathPosition).add(normal.multiplyScalar(heightAboveTrack));
+                    
+                    // Create a curved path for more dramatic effect
+                    // Start high and far away, then swoop in
+                    const curveX = THREE.MathUtils.lerp(0, targetPoint.x, eased);
+                    const curveY = THREE.MathUtils.lerp(2000, targetPoint.y, eased);
+                    const curveZ = THREE.MathUtils.lerp(2000, targetPoint.z, eased);
+                    
+                    // Add a slight arc to the camera path
+                    const arcHeight = 400 * (1 - eased) * Math.sin(eased * Math.PI);
+                    
+                    // Apply position with arc
+                    camera.position.x = curveX;
+                    camera.position.y = curveY + arcHeight;
+                    camera.position.z = curveZ;
+                    
+                    // Gradually look from center to forward along track
+                    lookAtPoint = new THREE.Vector3();
+                    
+                    // Start looking at center, end looking at a point ahead on the track
+                    const centerPoint = new THREE.Vector3(0, 0, 0);
+                    let aheadPoint;
+                    try {
+                        // Look ahead based on current audio position
+                        if (audioElement && energyData.length > 0) {
+                            const normalizedPosition = findClosestTimeIndex(audioElement.currentTime, energyData) / energyData.length;
+                            const lookAheadPosition = Math.min(normalizedPosition + 0.01, 0.99);
+                            aheadPoint = path.getPointAt(lookAheadPosition);
+                        } else {
+                            aheadPoint = path.getPointAt(0.01);
+                        }
+                    } catch (error) {
+                        console.error("Error getting ahead point:", error);
+                        aheadPoint = new THREE.Vector3(10, 0, 0);
+                    }
+                    
+                    lookAtPoint.x = THREE.MathUtils.lerp(centerPoint.x, aheadPoint.x, eased);
+                    lookAtPoint.y = THREE.MathUtils.lerp(centerPoint.y, aheadPoint.y, eased);
+                    lookAtPoint.z = THREE.MathUtils.lerp(centerPoint.z, aheadPoint.z, eased);
+                    
+                    // Add a slight camera roll that gradually levels out
+                    camera.rotation.z = THREE.MathUtils.lerp(THREE.MathUtils.degToRad(5), 0, eased);
+                }
+                
+                // Apply the look-at
+                camera.lookAt(lookAtPoint);
+                
+                // Gradually increase fog density for immersive effect
+                if (scene.fog && scene.fog.density) {
+                    scene.fog.density = THREE.MathUtils.lerp(0.005, originalFogDensity, eased);
+                }
+                
+                // Update bloom effect for dramatic reveal
+                if (composer && composer.passes) {
+                    composer.passes.forEach(pass => {
+                        if (pass.name === 'UnrealBloomPass') {
+                            // Start with high bloom, reduce to normal
+                            pass.strength = THREE.MathUtils.lerp(2.0, 0.5, eased);
+                        }
+                    });
+                }
+                
+                // Fade in UI elements near the end of the animation
+                if (progress > 0.8) {
+                    const uiFadeProgress = (progress - 0.8) / 0.2; // Normalize to 0-1 for last 20% of animation
+                    const uiOpacity = uiFadeProgress.toFixed(2);
+                    document.getElementById('info').style.opacity = uiOpacity;
+                    document.getElementById('controls').style.opacity = uiOpacity;
+                    document.getElementById('view-controls').style.opacity = uiOpacity;
+                    document.getElementById('back-to-menu').style.opacity = uiOpacity;
+                }
+            } catch (error) {
+                console.error("Error in intro animation frame:", error);
+                // Continue animation despite errors
+            }
+            
+            // Continue animation
+            requestAnimationFrame(animateIntro);
+        } else {
+            // Animation complete, but we'll manage a smooth transition to first person mode
+            // Don't immediately restore first person mode or end the animation
+            
+            // Gradually transition to normal camera control over 2 seconds
+            const transitionDuration = 2.0;
+            const transitionStartTime = clock.getElapsedTime();
+            
+            // Store the final camera position/rotation from the intro animation
+            const introEndPosition = camera.position.clone();
+            const introEndRotation = new THREE.Euler().copy(camera.rotation);
+            
+            // Create a function to handle the transition
+            function smoothTransitionToFirstPerson() {
+                console.log("Starting smooth transition to first person camera");
+                
+                const transitionDuration = 2000; // 2 seconds
+                const startTime = Date.now();
+                const fadeInTime = startTime + transitionDuration * 0.35; // Earlier fade in at 35% of the transition
+                const fadeOutTime = startTime + transitionDuration * 0.65; // Later fade out at 65% of the transition
+                let fadedIn = false;
+                let fadedOut = false;
+                
+                // Store initial camera values
+                const initialPosition = camera.position.clone();
+                const initialQuaternion = camera.quaternion.clone();
+                
+                // Create and prepare the fade overlay immediately
+                const fadeOverlay = createFadeOverlay();
+                // Ensure the overlay is at opacity 0 initially
+                fadeOverlay.style.opacity = '0';
+                // Add a more dramatic flash by setting a brighter white and adding a glow
+                fadeOverlay.style.backgroundColor = 'white';
+                fadeOverlay.style.boxShadow = 'inset 0 0 50px rgba(255,255,255,0.8)';
+                console.log("Fade overlay prepared for transition");
+                
+                // First person camera update logic from updateCameraPosition function
+                // ... existing code ...
+                
+                function updateTransition() {
+                    const now = Date.now();
+                    const elapsed = now - startTime;
+                    
+                    // Handle fade to white during the middle of the transition
+                    if (!fadedIn && now >= fadeInTime) {
+                        fadedIn = true;
+                        console.log("FLASH: Triggering fade to white at", elapsed, "ms");
+                        
+                        // Create backup DOM element for the flash (triple redundancy approach)
+                        const backupFlash = document.createElement('div');
+                        backupFlash.className = 'fade-overlay-active';
+                        document.body.appendChild(backupFlash);
+                        
+                        // Use CSS animation as primary backup
+                        document.body.classList.add('flash-white');
+                        
+                        // Log message for debugging
+                        console.log("White flash triggered - using multiple approaches for visibility");
+                        
+                        // Use our main approach with the fade overlay
+                        fadeToWhite(300).then(() => {
+                            console.log("White flash visible phase complete");
+                        });
+                        
+                        // Clean up backup after appropriate delay
+                        setTimeout(() => {
+                            document.body.classList.remove('flash-white');
+                            if (document.body.contains(backupFlash)) {
+                                backupFlash.classList.add('fade-out');
+                                setTimeout(() => {
+                                    if (document.body.contains(backupFlash)) {
+                                        document.body.removeChild(backupFlash);
+                                    }
+                                }, 1000);
+                            }
+                        }, 500);
+                    }
+                    
+                    if (fadedIn && !fadedOut && now >= fadeOutTime) {
+                        fadedOut = true;
+                        console.log("Triggering fade from white at", elapsed, "ms");
+                        
+                        // Ensure the overlay is fully visible before starting the fade out
+                        const fadeOverlay = document.getElementById('fade-overlay');
+                        if (fadeOverlay) {
+                            // Force a reflow to ensure opacity transitions work properly
+                            fadeOverlay.offsetHeight;
+                            
+                            // Trigger the fade out with increased duration for smoother transition
+                            fadeFromWhite(500).then(() => {
+                                console.log("Fade out complete");
+                            });
+                        } else {
+                            console.warn("Fade overlay not found for fade out");
+                        }
+                    }
+                    
+                    if (elapsed < transitionDuration) {
+                        try {
+                            // Calculate progress of the transition
+                            const transitionProgress = Math.min(elapsed / transitionDuration, 1.0);
+                            
+                            // Get the rollercoaster path
+                            const path = getRollercoasterPath();
+                            if (!path) throw new Error("Path not found during transition");
+                            
+                            // Get audio element
+                            const audioElement = getAudioElement();
+                            if (!audioElement) throw new Error("Audio element not found during transition");
+                            
+                            // Calculate what the first-person camera position would be
+                            // This is similar to what's in updateCameraPosition
+                            const normalizedPosition = findClosestTimeIndex(audioElement.currentTime, energyData) / energyData.length;
+                            
+                            // Get position on the path
+                            const pathPosition = path.getPointAt(Math.min(normalizedPosition, 0.99));
+                            
+                            // Get the tangent for camera orientation
+                            const tangent = path.getTangentAt(Math.min(normalizedPosition, 0.99));
+                            
+                            // Calculate normal and binormal for orientation
+                            const normal = new THREE.Vector3();
+                            const binormal = new THREE.Vector3();
+                            const up = new THREE.Vector3(0, 1, 0);
+                            
+                            // Get the frame vectors
+                            binormal.crossVectors(tangent, up).normalize();
+                            normal.crossVectors(binormal, tangent).normalize();
+                            
+                            // Calculate where first-person camera should be
+                            const heightAboveTrack = 4; // Same as config.defaultHeightAboveTrack
+                            const fpvPosition = new THREE.Vector3().copy(pathPosition).add(
+                                normal.clone().multiplyScalar(heightAboveTrack)
+                            );
+                            
+                            // Calculate look ahead point
+                            const lookAheadPosition = Math.min(normalizedPosition + 0.01, 0.99);
+                            const fpvLookAt = path.getPointAt(lookAheadPosition);
+                            
+                            // Create temporary camera to get rotation
+                            const tempCamera = new THREE.PerspectiveCamera();
+                            tempCamera.position.copy(fpvPosition);
+                            tempCamera.lookAt(fpvLookAt);
+                            const fpvRotation = tempCamera.rotation.clone();
+                            
+                            // Smoothly blend from intro end position to fpv position
+                            // Use easeInOutQuad for smoother transition
+                            const easeInOutQuad = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                            const easedProgress = easeInOutQuad(transitionProgress);
+                            
+                            // Interpolate position
+                            camera.position.lerpVectors(introEndPosition, fpvPosition, easedProgress);
+                            
+                            // Interpolate rotation - need to use quaternions for smooth rotation
+                            const introQuaternion = new THREE.Quaternion().setFromEuler(introEndRotation);
+                            const fpvQuaternion = new THREE.Quaternion().setFromEuler(fpvRotation);
+                            const resultQuaternion = new THREE.Quaternion().copy(introQuaternion);
+                            
+                            // Use slerp as an instance method, not a static method
+                            resultQuaternion.slerp(fpvQuaternion, easedProgress);
+                            camera.quaternion.copy(resultQuaternion);
+                            
+                            // Debug logging
+                            if (Math.random() < 0.01) {
+                                console.log(`Transition progress: ${Math.round(transitionProgress * 100)}% - Position: ${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)}`);
+                            }
+                            
+                            requestAnimationFrame(updateTransition);
+                        } catch (error) {
+                            console.error("Error during camera transition:", error);
+                            state.firstPersonMode = true;
+                            introAnimationComplete = true;
+                            isIntroAnimationActive = false;
+                            
+                            // In case of error, ensure we fade out
+                            if (fadedIn && !fadedOut) {
+                                fadeFromWhite(300);
+                            }
+                        }
+                    } else {
+                        // Transition complete, fully enable first person mode
+                        console.log("Camera transition complete, enabling regular camera control");
+                        state.firstPersonMode = true; // Ensure first person mode is enabled
+                        introAnimationComplete = true;
+                        isIntroAnimationActive = false; // Clear intro animation state
+                        
+                        // Ensure the fade from white is complete
+                        if (!fadedOut) {
+                            fadeFromWhite(300);
+                        }
+                    }
+                }
+                
+                // Start the transition
+                updateTransition();
+            }
+            
+            // Start the transition
+            smoothTransitionToFirstPerson();
+            
+            // Ensure UI elements are fully visible
+            document.getElementById('info').style.opacity = '1';
+            document.getElementById('controls').style.opacity = '1';
+            document.getElementById('view-controls').style.opacity = '1';
+            document.getElementById('back-to-menu').style.opacity = '1';
+            
+            console.log("Intro animation complete, starting smooth transition to first-person mode");
+        }
+    }
+    
+    // Start the intro animation
+    console.log("Starting intro animation loop");
+    animateIntro();
 }
 
 // Handle window resize
@@ -615,9 +1215,12 @@ function animate() {
             updateLightOrbs(audioData);
         }
         
-        // Always update camera position along path based on current time
-        // This allows scrubbing through the visualization even when paused
-        updateCameraPosition(getRollercoasterPath(), audioElement, energyData);
+        // Only update camera position if intro animation is not active
+        if (!isIntroAnimationActive) {
+            // Always update camera position along path based on current time
+            // This allows scrubbing through the visualization even when paused
+            updateCameraPosition(getRollercoasterPath(), audioElement, energyData);
+        }
         
         // Always animate objects based on audio data, even when paused
         // This makes the visualization fully interactive at any point
@@ -774,3 +1377,47 @@ window.mainFunctions = {
     toggleViewMode: () => toggleViewMode(getRollercoasterPath(), getAudioElement()),
     togglePsychedelicEffects
 };
+
+// Add a style for the backup approach - more dramatic with better animation
+const flashStyle = document.createElement('style');
+flashStyle.innerHTML = `
+    /* The primary flash effect using ::before pseudo-element */
+    .flash-white::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: white;
+        z-index: 9999;
+        pointer-events: none;
+        box-shadow: inset 0 0 100px rgba(255,255,255,1);
+        animation: flash-fade 3.0s cubic-bezier(0.4, 0.0, 0.2, 1) forwards; /* Increased from 0.8s to 3.0s */
+    }
+    
+    /* Enhanced animation with longer visible duration */
+    @keyframes flash-fade {
+        0%, 40% { opacity: 1; } /* Extended visible time from 30% to 40% */
+        100% { opacity: 0; }
+    }
+    
+    /* Add a fade overlay class as additional backup */
+    .fade-overlay-active {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: white;
+        z-index: 9998;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 3.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Increased from 0.8s to 3.5s to match other timing */
+    }
+    
+    .fade-overlay-active.fade-out {
+        opacity: 0;
+    }
+`;
+document.head.appendChild(flashStyle);
